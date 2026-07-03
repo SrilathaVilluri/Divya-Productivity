@@ -1585,10 +1585,10 @@
             <div class="form-grid" style="margin-bottom:8px">
                 <div class="form-group"><label>Phase</label>
                     <select class="fs" id="ct_phase">
-                        <option value="dsa">🧩 DSA</option>
-                        <option value="java">☕ Core Java</option>
-                        <option value="spring">🌱 Spring Boot</option>
-                        <option value="sysdesign">🏗️ System Design</option>
+                        <option value="dsa">🧩 DSA &amp; Problem Solving</option>
+                        <option value="java">☕ Core Java Deep Dive</option>
+                        <option value="spring">🌱 Spring Boot &amp; Microservices</option>
+                        <option value="sysdesign">🏗️ System Design (LLD + HLD)</option>
                         <option value="interview">🎯 Interview Readiness</option>
                     </select>
                 </div>
@@ -7876,7 +7876,7 @@
         var subtitle=document.getElementById('pm_subtitle').value.trim();
         var salary=document.getElementById('pm_salary').value.trim();
         var start=document.getElementById('pm_start').value.trim();
-        if(start&&!start.match(/^d{4}-d{2}-d{2}$/)){appToast('⚠️ Start date: YYYY-MM-DD');return;}
+        if(start&&!start.match(/^\d{4}-\d{2}-\d{2}$/)){appToast('⚠️ Start date: YYYY-MM-DD');return;}
         var meta=ls_get('upskill_meta');
         if(title)meta.title=title;if(subtitle)meta.subtitle=subtitle;if(salary)meta.salary=salary;if(start)meta.start=start;
         ls_set('upskill_meta',meta);closePrepMetaModal();renderUpskill();appToast('✅ Prep info saved!');
@@ -7982,6 +7982,16 @@
 
         renderUpskillPhases();
         renderMockLog();
+        // Sync the "Add Topic" phase dropdown with current plan (includes custom categories)
+        (function(){
+            var sel = document.getElementById('ct_phase');
+            if (!sel) return;
+            var plan = getPrepPlanData();
+            var cur = sel.value;
+            sel.innerHTML = plan.map(function(ph){
+                return '<option value="'+ph.id+'"'+(ph.id===cur?' selected':'')+'>'+ph.icon+' '+ph.label+'</option>';
+            }).join('');
+        })();
     }
 
     // Tracks collapsed state per phase: key = phase.id, true = collapsed
