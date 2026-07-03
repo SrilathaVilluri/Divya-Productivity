@@ -2044,8 +2044,12 @@
             } else if (sTs > lTs && Object.prototype.hasOwnProperty.call(data, k)) {
               try { localStorage.setItem(k, JSON.stringify(data[k])); } catch(e) {}
               localKeyTs[k] = sTs;
+            } else if (lTs === 0 && Object.prototype.hasOwnProperty.call(data, k)) {
+              // Key never synced on this device — always pull from server
+              try { localStorage.setItem(k, JSON.stringify(data[k])); } catch(e) {}
+              localKeyTs[k] = sTs || 1;
             }
-            // equal timestamps or no server data — keep local as-is
+            // equal timestamps (and lTs>0) or no server data — keep local as-is
           });
           _setKeyTs(localKeyTs);
           if (!_initDone) { _initDone = true; initDashboard(); }
@@ -2222,53 +2226,75 @@
             appToast('Firebase not ready yet. Please wait a moment and try again.');
             return;
         }
-      // Step 1: Push only dirty local keys up first (so no local data is lost)
-      var dirty = _getDirtyKeys();
-      var dirtyList = Object.keys(dirty).filter(function(k){ return SYNCED_KEYS.indexOf(k) !== -1; });
-      // Only fall back to all keys when there's a known pending push (avoids huge unnecessary writes)
-      if (dirtyList.length === 0 && localStorage.getItem('_ls_pending_push') === '1') {
-        dirtyList = SYNCED_KEYS.slice();
-      }
-      var doUpdate = dirtyList.length > 0;
-      var out = {}; var kts = _getKeyTs(); var now = _localChangeTime || parseInt(localStorage.getItem('_ls_local_ts')||'0')||1;
-      if (doUpdate) {
-        dirtyList.forEach(function(k) {
-          var raw = localStorage.getItem(k);
-          out[k] = raw !== null ? (function(){ try{return JSON.parse(raw);}catch(e){return null;} })() : null;
-          out['_key_ts/' + k] = kts[k] || now;
+        // Pull-first, timestamp-aware bidirectional sync:
+        // 1. Fetch from Firebase
+        // 2. For each key, whichever has the NEWER timestamp wins
+        // 3. Push only the local winners back to Firebase
+        // This ensures: mobile's newer data pulls to laptop, laptop's erasures push to Firebase
+        _fbRef.once('value').then(function(snap) {
+            var data = snap ? snap.val() : null;
+            if (!data || typeof data !== 'object') data = {};
+            var serverKts  = data._key_ts || {};
+            var localKts   = _getKeyTs();
+            var dirty      = _getDirtyKeys();
+            var hasPending = localStorage.getItem('_ls_pending_push') === '1';
+            var sts        = data._server_ts || 0;
+            var now        = _localChangeTime || parseInt(localStorage.getItem('_ls_local_ts') || '0') || 1;
+            var toPush     = {};
+            var pushNeeded = false;
+            var mergedKts  = {};
+
+            SYNCED_KEYS.forEach(function(k) {
+                var sTs = serverKts[k] || sts || 0;
+                var lTs = localKts[k]  || 0;
+                var isLocalDirty = hasPending && !!dirty[k];
+
+                if (isLocalDirty && lTs >= sTs) {
+                    // Local is newer (or same) AND dirty → keep local, push it to Firebase
+                    var raw = localStorage.getItem(k);
+                    toPush[k] = raw !== null
+                        ? (function(){ try { return JSON.parse(raw); } catch(e) { return null; } })()
+                        : null;
+                    toPush['_key_ts/' + k] = lTs || now;
+                    mergedKts[k] = lTs || now;
+                    pushNeeded = true;
+                } else if (sTs > lTs && Object.prototype.hasOwnProperty.call(data, k)) {
+                    // Server is newer → pull from Firebase
+                    try { localStorage.setItem(k, JSON.stringify(data[k])); } catch(e) {}
+                    mergedKts[k] = sTs;
+                } else {
+                    // Same timestamp or local not dirty → keep local.
+                    // Special case: if local has NEVER been synced (lTs=0) and server has data,
+                    // pull it (handles first-time sync for this key on a new device).
+                    if (lTs === 0 && Object.prototype.hasOwnProperty.call(data, k)) {
+                        try { localStorage.setItem(k, JSON.stringify(data[k])); } catch(e) {}
+                        mergedKts[k] = sTs || 1;
+                    } else {
+                        mergedKts[k] = Math.max(sTs, lTs);
+                    }
+                }
+            });
+
+            _setKeyTs(mergedKts);
+
+            var doFirebasePush = pushNeeded
+                ? (function() {
+                    toPush['_server_ts'] = now;
+                    return _fbRef.update(toPush);
+                  })()
+                : Promise.resolve();
+
+            return doFirebasePush;
+        }).then(function() {
+            try { localStorage.removeItem('_ls_dirty_keys'); localStorage.removeItem('_ls_pending_push'); } catch(e) {}
+            reRenderAll();
+            if (btn) { btn.textContent = '✅'; setTimeout(function(){ btn.textContent='🔄'; btn.disabled=false; }, 1500); }
+        }).catch(function(err) {
+            if (btn) { btn.textContent = '❌'; setTimeout(function(){ btn.textContent='🔄'; btn.disabled=false; }, 2500); }
+            var detail = (err && err.message) ? err.message : 'Check connection or Firebase rules.';
+            reRenderAll();
+            appToast('⚠️ Sync failed: ' + detail);
         });
-        out['_server_ts'] = now;
-      }
-      var step1 = doUpdate ? _fbRef.update(out) : Promise.resolve();
-      step1.then(function() {
-        // Step 2: Pull back from Firebase (now authoritative)
-        return _fbRef.once('value');
-      }).then(function(snap) {
-        var data = snap.val();
-        if (data && typeof data === 'object') {
-          var serverKts = data._key_ts || {};
-          var newKts = {};
-          var sts = data._server_ts || now;
-          SYNCED_KEYS.forEach(function(k) {
-            if (Object.prototype.hasOwnProperty.call(data, k)) {
-              try { localStorage.setItem(k, JSON.stringify(data[k])); } catch(e) {}
-            }
-            newKts[k] = serverKts[k] || sts;
-          });
-          _setKeyTs(newKts);
-          try { localStorage.removeItem('_ls_dirty_keys'); localStorage.removeItem('_ls_pending_push'); } catch(e) {}
-          reRenderAll();
-          if (btn) { btn.textContent = '✅'; setTimeout(function(){ btn.textContent='🔄'; btn.disabled=false; }, 1500); }
-        } else {
-          if (btn) { btn.textContent = '🔄'; btn.disabled = false; }
-        }
-      }).catch(function(err) {
-          if (btn) { btn.textContent = '❌'; setTimeout(function(){ btn.textContent='🔄'; btn.disabled=false; }, 2500); }
-          var detail = (err && err.message) ? err.message : 'Check internet connection or Firebase rules (auth != null requires Anonymous Auth enabled).';
-          // Fallback: at least re-render from local cache
-          reRenderAll();
-          appToast('⚠️ Sync failed: ' + detail);
-      });
     }
 
     // Pull shopping keys fresh from Firebase then re-render
@@ -4660,7 +4686,12 @@
       var s = _ERASE[sectionKey];
       if (!s) return;
       if (!confirm('⚠️ Erase all "' + s.label + '" data?\n\nThis is permanent and cannot be undone.')) return;
-      s.keys.forEach(function(k){ try { localStorage.removeItem(k); } catch(e){} });
+      // Use ls_set({}) instead of removeItem so the timestamp gets bumped and
+      // the erasure is treated as a local write — it will be pushed to Firebase,
+      // preventing the next sync from restoring the old data.
+      s.keys.forEach(function(k) {
+        try { ls_set(k, {}); } catch(e) {}
+      });
       if (s.cb) s.cb();
     }
 
@@ -5434,7 +5465,6 @@
             }
           }
           html += '</div>';
-          html += '<div style="font-size:10px;color:var(--text3);margin-top:4px">Tap once = ✅ done · Tap again = ❌ missed · Tap again = clear</div>';
           html += '</div></div>';
         });
         el.innerHTML = html;
