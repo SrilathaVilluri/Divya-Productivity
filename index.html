@@ -1550,8 +1550,8 @@
         <div class="card" style="background:linear-gradient(135deg,rgba(255,107,0,0.12),rgba(255,107,0,0.04));border:0.5px solid rgba(255,107,0,0.3)">
             <div style="display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:12px">
                 <div>
-                    <div style="font-size:18px;font-weight:800;color:var(--text1)">🚀 Job Switch Prep</div>
-                    <div style="font-size:12px;color:var(--text3);margin-top:2px">Java Dev → Product Company · Target: 25+ LPA · 50 Days · 3 hrs/day</div>
+                    <div id="up_plan_title" style="font-size:18px;font-weight:800;color:var(--text1)">🚀 Job Switch Prep</div>
+                    <div id="up_plan_sub" style="font-size:12px;color:var(--text3);margin-top:2px">Java Dev → Product Company · Target: 25+ LPA · 50 Days · 3 hrs/day</div>
                 </div>
                 <div style="display:flex;gap:8px;flex-wrap:wrap">
                     <div class="sum-box" style="min-width:68px"><div class="sv" id="up_days_left" style="color:var(--accent)">—</div><div class="sl">Days left</div></div>
@@ -8208,6 +8208,19 @@
         var meta = ls_get('upskill_meta');
         var custom = ls_get('upskill_custom'); // {phaseId: [{id,name,source,url,hours,diff}, ...]}
         var mocks = ls_get('upskill_mocks');
+
+        // Update header title + subtitle from saved meta
+        var titleEl = document.getElementById('up_plan_title');
+        var subEl   = document.getElementById('up_plan_sub');
+        if (titleEl) titleEl.textContent = (meta.title || 'Job Switch Prep');
+        if (subEl) {
+            var parts = [];
+            if (meta.subtitle)  parts.push(meta.subtitle);
+            if (meta.salary)    parts.push('Target: ' + meta.salary);
+            if (meta.totalDays) parts.push(meta.totalDays + ' Days');
+            if (meta.dailyHrs)  parts.push(meta.dailyHrs + ' hrs/day');
+            subEl.textContent = parts.length > 0 ? parts.join(' · ') : '';
+        }
 
         // Count all topics including custom
         var allTopics = [];
