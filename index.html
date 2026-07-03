@@ -16,6 +16,7 @@
     <!-- Firebase SDK (offline persistence built-in) -->
     <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
 
     <style>
         /* ══════════════════════════════════════
@@ -1972,7 +1973,7 @@
     var _rawFbCfg = getAppConfig().firebase || null;
     var FB_CONFIG = _rawFbCfg && _rawFbCfg.apiKey ? _rawFbCfg : null;
 
-    var _fbApp = null, _fbDb = null, _fbRef = null, _fbReady = false;
+    var _fbApp = null, _fbDb = null, _fbRef = null, _fbReady = false, _fbAuth = null;
     var _syncTimer = null;
     var _localChangeTime = 0;   // timestamp of last local edit
     var _pendingPush = false;   // true while a push is in-flight
@@ -1988,6 +1989,15 @@
         _fbApp = (firebase.apps && firebase.apps.length) ? firebase.app() : firebase.initializeApp(FB_CONFIG);
         _fbDb  = firebase.database();
         _fbRef = _fbDb.ref('dashboard/data');
+        _fbAuth = firebase.auth();
+        // Restore admin Firebase Auth session on load (so writes work after page reload)
+        _fbAuth.onAuthStateChanged(function(user) {
+          if (user && _authRole !== 'admin') {
+            // Firebase session active but UI role not yet set — happens on reload
+            var stored = localStorage.getItem('_auth_role');
+            if (stored === 'admin') { _authRole = 'admin'; applyAuthRole(); }
+          }
+        });
         _fbReady = true;
         _updateShareableHash();
         // FIX 3 (task): Notify the service worker of the current #fb= hash so it can
@@ -2000,28 +2010,34 @@
         // Persist Firebase config so hash-less launches (PWA home screen) work on this device
         try { localStorage.setItem('_fb_bootstrap', JSON.stringify(FB_CONFIG)); } catch(e) {}
 
-        // Fetch once from server → seed localStorage → init
+        // Fetch once from server → per-key merge → init
         _fbRef.once('value').then(function(snap) {
           var data = snap.val();
-          var serverTs = (data && data._server_ts) ? data._server_ts : 0;
-          var localTs  = parseInt(localStorage.getItem('_ls_local_ts') || '0');
-          var hasPending = localStorage.getItem('_ls_pending_push') === '1';
-          if (hasPending && localTs > serverTs) {
+          if (!data || typeof data !== 'object') {
             if (!_initDone) { _initDone = true; initDashboard(); }
-            setTimeout(pushToFirebase, 100);
-          } else if (data && typeof data === 'object') {
-            SYNCED_KEYS.forEach(function(k) {
-              if (Object.prototype.hasOwnProperty.call(data, k)) {
-                try { localStorage.setItem(k, JSON.stringify(data[k])); } catch(e) {}
-              } else {
-                try { localStorage.removeItem(k); } catch(e) {}
-              }
-            });
-            if (!_initDone) { _initDone = true; initDashboard(); }
-            else { reRenderAll(); }
-          } else {
-            if (!_initDone) { _initDone = true; initDashboard(); }
+            return;
           }
+          var serverKeyTs = data._key_ts || {};
+          var localKeyTs = _getKeyTs();
+          var dirty = _getDirtyKeys();
+          var hasPending = localStorage.getItem('_ls_pending_push') === '1';
+          var anyLocalWins = false;
+          SYNCED_KEYS.forEach(function(k) {
+            var sTs = serverKeyTs[k] || 0;
+            var lTs = localKeyTs[k] || 0;
+            var isLocalDirty = hasPending && !!dirty[k];
+            if (isLocalDirty && lTs >= sTs) {
+              anyLocalWins = true; // keep local value; push will send it up
+            } else if (sTs > lTs && Object.prototype.hasOwnProperty.call(data, k)) {
+              try { localStorage.setItem(k, JSON.stringify(data[k])); } catch(e) {}
+              localKeyTs[k] = sTs;
+            }
+            // equal timestamps or no server data — keep local as-is
+          });
+          _setKeyTs(localKeyTs);
+          if (!_initDone) { _initDone = true; initDashboard(); }
+          else { reRenderAll(); }
+          if (anyLocalWins) { setTimeout(pushToFirebase, 100); }
         }).catch(function() {
           if (!_initDone) { _initDone = true; initDashboard(); }
         });
@@ -2031,28 +2047,30 @@
           if (!_initDone) { _initDone = true; initDashboard(); }
         }, 4000);
 
-        // Live sync listener — only fires for REMOTE changes AFTER init
+        // Live sync listener — per-key merge so remote changes don't overwrite local unsent edits
         _fbRef.on('value', function(snap) {
           if (!_initDone) return;
           if (_pendingPush) return;
-          var _ld = snap.val();
-          var _sts = (_ld && _ld._server_ts) ? _ld._server_ts : 0;
-          var _lts = parseInt(localStorage.getItem('_ls_local_ts') || '0');
-          if (_lts > _sts + 2000) return;
           var data = snap.val();
-          if (!data) return;
+          if (!data || typeof data !== 'object') return;
+          var serverKeyTs = data._key_ts || {};
+          var localKeyTs = _getKeyTs();
+          var dirty = _getDirtyKeys();
+          var hasPending = localStorage.getItem('_ls_pending_push') === '1';
+          var anyChanged = false;
           SYNCED_KEYS.forEach(function(k) {
-            if (Object.prototype.hasOwnProperty.call(data, k)) {
+            var sTs = serverKeyTs[k] || 0;
+            var lTs = localKeyTs[k] || 0;
+            var isLocalDirty = hasPending && !!dirty[k];
+            if (isLocalDirty && lTs >= sTs) return; // local is newer — don't overwrite
+            if (sTs > lTs && Object.prototype.hasOwnProperty.call(data, k)) {
               try { localStorage.setItem(k, JSON.stringify(data[k])); } catch(e) {}
-            } else {
-              // Key exists locally but not in Firebase — only remove if Firebase actually
-              // has other data (i.e. this is a real deletion, not just a key not yet synced)
-              // Don't remove locally-seeded data that hasn't been pushed yet
-              if (_pendingPush) return; // push in progress, don't touch local data
-              try { localStorage.removeItem(k); } catch(e) {}
+              localKeyTs[k] = sTs;
+              anyChanged = true;
             }
           });
-          reRenderAll();
+          _setKeyTs(localKeyTs);
+          if (anyChanged) reRenderAll();
         });
 
       } catch(e) {
@@ -2073,7 +2091,7 @@
       'nut_templates','recurring_expenses','recurring_logged',
       'score_weights','day_notes','exp_tags_custom','things_notes',
       'upskill_progress','upskill_notes','upskill_mocks','upskill_meta','upskill_custom','owed_list','hidden_tabs',
-      'day_type_defs','upskill_overrides','upskill_plan_data'];
+      'day_type_defs','upskill_overrides','upskill_plan_data','study_sessions'];
 
     function schedulePush() {
       if (_syncTimer) clearTimeout(_syncTimer);
@@ -2082,17 +2100,27 @@
 
     function pushToFirebase() {
       if (!_fbReady || !_fbRef) return;
-      var out = {};
-      SYNCED_KEYS.forEach(function(k) {
+      var dirty = _getDirtyKeys();
+      var dirtyList = Object.keys(dirty).filter(function(k){ return SYNCED_KEYS.indexOf(k) !== -1; });
+      // Fall back to full push if no per-key dirty tracking yet (first run / legacy data)
+      if (dirtyList.length === 0 && localStorage.getItem('_ls_pending_push') === '1') {
+        dirtyList = SYNCED_KEYS.slice();
+      }
+      if (dirtyList.length === 0) return;
+      var updates = {};
+      var kts = _getKeyTs();
+      var now = _localChangeTime || parseInt(localStorage.getItem('_ls_local_ts') || '0') || 1;
+      dirtyList.forEach(function(k) {
         var raw = localStorage.getItem(k);
-        if (raw !== null) { try { out[k] = JSON.parse(raw); } catch(e) {} }
+        updates[k] = raw !== null ? (function(){ try { return JSON.parse(raw); } catch(e) { return null; } })() : null;
+        updates['_key_ts/' + k] = kts[k] || now;
       });
-      out._server_ts = Date.now();
+      updates['_server_ts'] = now;
       _pendingPush = true;
-      _fbRef.set(out).then(function() {
+      _fbRef.update(updates).then(function() {
         _pendingPush = false;
-        try{localStorage.removeItem('_ls_pending_push');}catch(e){}
-        _lastSyncTime = Date.now();
+        try { localStorage.removeItem('_ls_pending_push'); localStorage.removeItem('_ls_dirty_keys'); } catch(e) {}
+        _lastSyncTime = _localChangeTime;
       }).catch(function() {
         _pendingPush = false;
         // Retry once after 3 seconds on failure
@@ -2136,25 +2164,37 @@
         if (btn) { btn.textContent = '⏳'; btn.disabled = true; }
         if (!_fbRef || !_fbReady) {
             if (btn) { btn.textContent = '🔄'; btn.disabled = false; }
-            alert('Firebase not ready yet. Please wait a moment and try again.');
+            appToast('Firebase not ready yet. Please wait a moment and try again.');
             return;
         }
-      // Step 1: Push local state up first (so no local data is lost)
-      var out = {};
-      SYNCED_KEYS.forEach(function(k) {
+      // Step 1: Push only dirty local keys up first (so no local data is lost)
+      var dirty = _getDirtyKeys();
+      var dirtyList = Object.keys(dirty).filter(function(k){ return SYNCED_KEYS.indexOf(k) !== -1; });
+      if (dirtyList.length === 0) dirtyList = SYNCED_KEYS.slice();
+      var out = {}; var kts = _getKeyTs(); var now = _localChangeTime || parseInt(localStorage.getItem('_ls_local_ts')||'0')||1;
+      dirtyList.forEach(function(k) {
         var raw = localStorage.getItem(k);
-        if (raw !== null) { try { out[k] = JSON.parse(raw); } catch(e) {} }
+        out[k] = raw !== null ? (function(){ try{return JSON.parse(raw);}catch(e){return null;} })() : null;
+        out['_key_ts/' + k] = kts[k] || now;
       });
-      _fbRef.set(out).then(function() {
+      out['_server_ts'] = now;
+      _fbRef.update(out).then(function() {
         // Step 2: Pull back from Firebase (now authoritative)
         return _fbRef.once('value');
       }).then(function(snap) {
         var data = snap.val();
         if (data && typeof data === 'object') {
-          SYNCED_KEYS.forEach(function(k) { try { localStorage.removeItem(k); } catch(e) {} });
-          Object.keys(data).forEach(function(k) {
-            try { localStorage.setItem(k, JSON.stringify(data[k])); } catch(e) {}
+          var serverKts = data._key_ts || {};
+          var newKts = {};
+          var sts = data._server_ts || now;
+          SYNCED_KEYS.forEach(function(k) {
+            if (Object.prototype.hasOwnProperty.call(data, k)) {
+              try { localStorage.setItem(k, JSON.stringify(data[k])); } catch(e) {}
+            }
+            newKts[k] = serverKts[k] || sts;
           });
+          _setKeyTs(newKts);
+          try { localStorage.removeItem('_ls_dirty_keys'); localStorage.removeItem('_ls_pending_push'); } catch(e) {}
           reRenderAll();
           if (btn) { btn.textContent = '✅'; setTimeout(function(){ btn.textContent='🔄'; btn.disabled=false; }, 1500); }
         } else {
@@ -2165,7 +2205,7 @@
           var detail = (err && err.message) ? err.message : 'Check internet connection or Firebase rules.';
           // Fallback: at least re-render from local cache
           reRenderAll();
-          alert('Sync failed: ' + detail);
+          appToast('⚠️ Sync failed: ' + detail);
       });
     }
 
@@ -2204,6 +2244,9 @@
         if (name === 'things' || name === 'sparks') name = 'notes';
         if (name === 'nutrition') {
             setTimeout(function() { var b=document.getElementById('health_food_body'); var a=document.getElementById('health_food_arr'); if(b){b.style.display='block'; if(a)a.textContent='▼';} }, 80);
+        }
+        if (name === 'body') {
+            setTimeout(function() { var b=document.getElementById('health_body_body'); var a=document.getElementById('health_body_arr'); if(b){b.style.display='block'; if(a)a.textContent='▼';} }, 80);
         }
         if (name === 'body' || name === 'nutrition') name = 'health';
         if (name === 'grocery' || name === 'shopping' || name === 'notes' || name === 'reflect') name = 'goals';
@@ -2349,11 +2392,12 @@
         if (dayNum > TOTAL_DAYS) dayNum = TOTAL_DAYS;
 
         // Count topics done vs total
+        var _prog = ls_get('upskill_progress');
         var totalTopics = 0, doneTopic = 0;
         UPSKILL_PLAN.forEach(function(ph) {
             (ph.topics || []).forEach(function(t) {
                 totalTopics++;
-                if (t.done) doneTopic++;
+                if (_prog[t.id]) doneTopic++;
             });
         });
         var expectedPct = Math.round((dayNum / TOTAL_DAYS) * 100);
@@ -2439,10 +2483,10 @@
             } else {
                 html += '<div style="font-size:12px;color:var(--text3);text-align:center;margin-bottom:12px">Not set yet for today</div>';
                 html += '<div style="display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin-bottom:12px">';
-                html += '<button class=\"btn btn-w\" onclick=\"setDayType(\'office\');ciNext()\">🏢 Office</button>';
-                html += '<button class=\"btn btn-w\" onclick=\"setDayType(\'wfh\');ciNext()\">🏠 WFH</button>';
-                html += '<button class=\"btn btn-w\" onclick=\"setDayType(\'weekend\');ciNext()\">🌴 Weekend</button>';
-                html += '<button class=\"btn btn-w\" onclick=\"setDayType(\'native\');ciNext()\">🏡 Native</button>';
+                var _defs = getDayTypeDefs();
+                _defs.forEach(function(def) {
+                    html += '<button class=\"btn btn-w\" onclick=\"setDayType(\'' + def.id + '\');ciNext()\">' + (def.icon||'📅') + ' ' + esc(def.label) + '</button>';
+                });
                 html += '</div>';
             }
         } else if (step === 'meal') {
@@ -2472,10 +2516,25 @@
     function ls_get(key) {
       try { var v = localStorage.getItem(key); return v ? JSON.parse(v) : {}; } catch(e) { return {}; }
     }
+    function _getKeyTs() {
+      try { return JSON.parse(localStorage.getItem('_ls_key_ts') || '{}'); } catch(e) { return {}; }
+    }
+    function _getDirtyKeys() {
+      try { return JSON.parse(localStorage.getItem('_ls_dirty_keys') || '{}'); } catch(e) { return {}; }
+    }
+    function _setKeyTs(kts) {
+      try { localStorage.setItem('_ls_key_ts', JSON.stringify(kts)); } catch(e) {}
+    }
     function ls_set(key, val) {
       try { localStorage.setItem(key, JSON.stringify(val)); } catch(e) {}
       _localChangeTime = Date['now']();
-      try{localStorage.setItem('_ls_local_ts',String(_localChangeTime));localStorage.setItem('_ls_pending_push','1');}catch(e){}
+      try {
+        localStorage.setItem('_ls_local_ts', String(_localChangeTime));
+        var _kts = _getKeyTs(); _kts[key] = _localChangeTime; _setKeyTs(_kts);
+        var _dk = _getDirtyKeys(); _dk[key] = true;
+        localStorage.setItem('_ls_dirty_keys', JSON.stringify(_dk));
+        localStorage.setItem('_ls_pending_push', '1');
+      } catch(e) {}
       schedulePush();
     }
     function flash(id) {
@@ -2716,7 +2775,7 @@
       rows.forEach(function(row, ri) {
         var k = 'sched_' + type + '_' + ri + '_' + dateStr;
         var state = data[k] || 0;
-        var isMissedPast = (state===0) && typeof dateStr==='string' && dateStr>='2026-07-01' && dateStr<getTodayISO();
+        var isMissedPast = (state===0) && typeof dateStr==='string' && dateStr>='2020-01-01' && dateStr<getTodayISO();
         html += '<tr>';
         html += '<td class="s1" style="color:var(--accent);font-weight:700;font-size:10px">' + esc(row.time||'') + '</td>';
         html += '<td class="s2">' + esc(row.task||'') + '</td>';
@@ -4128,12 +4187,12 @@
         return {daily: val.daily || null, monthly: val.monthly || null, set: true};
     }
     function saveLimit() {
-      var curMonth = new Date().toISOString().slice(0,7);
+      var curMonth = isoD(new Date()).slice(0,7);
       var daily = parseFloat(document.getElementById('goal_lim_amt').value);
-      if (!daily || daily <= 0) { alert('Enter a valid daily limit amount.'); return; }
+      if (!daily || daily <= 0) { appToast('Enter a valid daily limit amount.'); return; }
       var monthly = parseFloat((document.getElementById('goal_lim_monthly')||{}).value);
       var limits = ls_get('exp_limits');
-      if (limits[curMonth]) { alert('Limit for ' + curMonth + ' is already set and locked.'); return; }
+      if (limits[curMonth]) { appToast('Limit for ' + curMonth + ' is already set and locked.'); return; }
       limits[curMonth] = {daily: daily, monthly: isNaN(monthly) ? null : monthly};
       ls_set('exp_limits', limits);
       document.getElementById('goal_lim_amt').value = '';
@@ -4444,8 +4503,11 @@
       }
     }
 
+    var _reminderTimer = null;
+
     function scheduleLocalReminder() {
       if (Notification.permission !== 'granted') return;
+      if (_reminderTimer) { clearTimeout(_reminderTimer); _reminderTimer = null; }
       var now = new Date();
       var h = now.getHours(), m = now.getMinutes();
       // Daily 10:30 AM reminder
@@ -4453,7 +4515,8 @@
       target.setHours(10, 30, 0, 0);
       if (target <= now) target.setDate(target.getDate() + 1);
       var ms = target - now;
-      setTimeout(function() {
+      _reminderTimer = setTimeout(function() {
+        _reminderTimer = null;
         var dismissed = ls_get('notif_dismissed');
         var today = isoD(new Date());
         if (!dismissed[today]) {
@@ -4466,8 +4529,8 @@
         }
         scheduleLocalReminder(); // reschedule for next day
       }, ms);
-      // Also show banner if it's reminder time right now
-      if (h === 10 && m >= 0 && m < 60) {
+      // Also show banner if it's reminder hour right now (10 AM)
+      if (h === 10) {
         var dismissed = ls_get('notif_dismissed');
         if (!dismissed[isoD(now)]) {
           var banner = document.getElementById('notif_banner');
@@ -6219,6 +6282,16 @@
           document.getElementById('auth_overlay').classList.remove('open');
           applyAuthRole();
           _updateShareableHash();
+          // Sign into Firebase Auth so writes are permitted by Firebase rules
+          if (_fbAuth) {
+            var _email = 'admin@dashboard.local';
+            _fbAuth.signInWithEmailAndPassword(_email, val).catch(function(e) {
+              if (e.code === 'auth/user-not-found' || e.code === 'auth/invalid-credential' || e.code === 'auth/invalid-email') {
+                // First time — create the account
+                _fbAuth.createUserWithEmailAndPassword(_email, val).catch(function(){});
+              }
+            });
+          }
           if (!_fbReady) { initFirebase(); } else { reRenderAll(); }
         } else if (hash === AUTH_READONLY_HASH) {
           _authRole = 'readonly';
@@ -6237,6 +6310,8 @@
     function applyAuthRole() {
       if (_authRole === 'readonly') {
         document.body.classList.add('readonly');
+        // Sign out of Firebase Auth so writes are blocked at the server level
+        if (_fbAuth) { _fbAuth.signOut().catch(function(){}); }
         // Show readonly badge
         if (!document.getElementById('ro_badge')) {
           var badge = document.createElement('div');
@@ -6350,7 +6425,9 @@
     // INIT
     // ═══════════════════════════════════════
     if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register((getAppConfig().swPath) || 'sw.js').catch(function(){});
+      navigator.serviceWorker.register((getAppConfig().swPath) || 'sw.js').catch(function(err){
+        console.warn('Service worker registration failed:', err);
+      });
     }
 
     window.addEventListener('load', function() {
@@ -6728,9 +6805,9 @@
     function toggleNutCustom(id, btn) { btn.classList.toggle('sel'); }
 
     function saveNutritionEntry() {
-        if (!_nutCat) { alert('Select a meal category first (Breakfast, Lunch etc.)'); return; }
+        if (!_nutCat) { appToast('Select a meal category first (Breakfast, Lunch etc.)'); return; }
         var d = (document.getElementById('nut_date')||{}).value;
-        if (!d) { alert('Select a date.'); return; }
+        if (!d) { appToast('Select a date.'); return; }
         var entry = {
             prot:    parseFloat(document.getElementById('nut_prot_c').value)||0,
             carb:    parseFloat(document.getElementById('nut_carb_c').value)||0,
@@ -6790,7 +6867,7 @@
     }
 
     function saveNutTemplate() {
-        if (!_nutCat) { alert('Select a meal category first.'); return; }
+        if (!_nutCat) { appToast('Select a meal category first.'); return; }
         var name = (document.getElementById('nut_dish') || {}).value || '';
         if (!name) { appPrompt('⭐ Template Name', 'Name for this template:', _nutCat, doSave); }
         else doSave(name);
@@ -6923,7 +7000,7 @@
         var fat  = parseFloat(document.getElementById('ci_fat').value)||0;
         var fib  = parseFloat(document.getElementById('ci_fib').value)||0;
         var cal  = parseFloat(document.getElementById('ci_cal').value)||0;
-        if (!name) { alert('Enter ingredient name.'); return; }
+        if (!name) { appToast('Enter ingredient name.'); return; }
         var items = ls_get('nutrition_items');
         var id = Date.now().toString();
         items[id] = {id:id, name:name, cat:cat, unit:unit, prot:prot, carb:carb, fat:fat, fib:fib, cal:cal};
@@ -8477,10 +8554,24 @@
         authReadonlyHash: roHash,
         firebase:         fbCfg
       });
-      if (roPass) {
-        window.location.reload();
+      // If Firebase is configured and an admin password was set, create the Firebase Auth account
+      // so that `.write: "auth != null"` Firebase rules work immediately.
+      function doReload() { window.location.reload(); }
+      if (fbCfg && adminPass) {
+        try {
+          var _tmpApp = (firebase.apps && firebase.apps.find(function(a){ return a.name === '_setup'; }))
+                        || firebase.initializeApp(fbCfg, '_setup');
+          _tmpApp.auth().createUserWithEmailAndPassword('admin@dashboard.local', adminPass)
+            .catch(function(e) {
+              if (e.code === 'auth/email-already-in-use') {
+                // Account already exists — sign in to confirm password
+                _tmpApp.auth().signInWithEmailAndPassword('admin@dashboard.local', adminPass).catch(function(){});
+              }
+            })
+            .finally(function() { doReload(); });
+        } catch(e) { doReload(); }
       } else {
-        window.location.reload();
+        doReload();
       }
     }
 
@@ -8658,6 +8749,21 @@
 
       if (adminPassNew) cfg.authAdminHash    = await sha256(adminPassNew);
       if (roPassNew)    cfg.authReadonlyHash = await sha256(roPassNew);
+
+      // Update Firebase Auth password if admin password changed
+      if (adminPassNew && _fbAuth && _fbAuth.currentUser) {
+        _fbAuth.currentUser.updatePassword(adminPassNew).catch(function(e) {
+          if (e.code === 'auth/requires-recent-login') {
+            appToast('⚠️ Re-login required to update Firebase password — please log in again.');
+          }
+        });
+      } else if (adminPassNew && _fbAuth) {
+        // Not signed in — try to sign in with new password or create account
+        _fbAuth.signInWithEmailAndPassword('admin@dashboard.local', adminPassNew)
+          .catch(function() {
+            _fbAuth.createUserWithEmailAndPassword('admin@dashboard.local', adminPassNew).catch(function(){});
+          });
+      }
 
       if (fbApiKey && fbDbUrl) {
         cfg.firebase = {
