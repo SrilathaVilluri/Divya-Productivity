@@ -18,7 +18,6 @@
     <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
 
-    
     <style>
         /* ══════════════════════════════════════
            DESIGN TOKENS — DARK (default)
@@ -528,9 +527,10 @@
   font-family:inherit;cursor:pointer;transition:all .2s;outline:none;min-height:40px}
 
 .muscle-row{display:flex;flex-wrap:wrap;gap:7px;margin-bottom:10px}
-.muscle-btn{padding:7px 13px;border-radius:24px;border:.5px solid var(--border);
-  background:var(--bg3);color:var(--text2);font-size:12px;font-weight:600;
-  cursor:pointer;font-family:inherit;transition:all .15s;white-space:nowrap}
+.muscle-btn{padding:6px 4px;border-radius:8px;border:.5px solid var(--border);
+  background:var(--bg3);color:var(--text2);font-size:11px;font-weight:600;
+  cursor:pointer;font-family:inherit;transition:all .15s;white-space:nowrap;
+  text-align:center;width:100%;overflow:hidden;text-overflow:ellipsis}
 .muscle-btn.sel{background:var(--accent);color:#fff;border-color:var(--accent);box-shadow:0 0 10px var(--ag)}
 .muscle-btn:active{transform:scale(.94)}
 
@@ -998,38 +998,39 @@
                 <span>💪 Gym Tracker</span><span id="health_gym_arr">▶</span>
             </button>
             <div id="health_gym_body" style="display:none;margin-top:8px">
-                <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:10px" class="admin-only">
-                    <button class="btn btn-r btn-sm" onclick="clearGymData('sessions')" style="font-size:11px">🗑️ Clear Sessions</button>
-                    <button class="btn btn-r btn-sm" onclick="clearGymData('templates')" style="font-size:11px">🗑️ Clear Templates</button>
-                    <div id="health_gym_summary" style="font-size:11px;color:var(--text3)"></div>
+                <!-- Compact summary + actions row -->
+                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;padding:0 2px">
+                    <div id="health_gym_summary" style="font-size:12px;color:var(--text3)">0 sessions</div>
+                    <div class="admin-only" style="display:flex;gap:6px">
+                        <button class="btn btn-w btn-sm" onclick="clearGymData('sessions')" style="font-size:10px;color:var(--red);padding:4px 8px;min-height:26px">🗑️ Sessions</button>
+                        <button class="btn btn-w btn-sm" onclick="clearGymData('templates')" style="font-size:10px;color:var(--red);padding:4px 8px;min-height:26px">🗑️ Templates</button>
+                    </div>
                 </div>
 <!-- ═══ GYM TRACKER — embedded ═══ -->
-<div style="display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;padding-bottom:12px;margin-bottom:4px">
+<div style="display:flex;gap:5px;overflow-x:auto;scrollbar-width:none;padding-bottom:10px;margin-bottom:4px">
   <button class="gym-tab active" id="gym_tab_log"      onclick="showGymTab('log')">📝 Log</button>
   <button class="gym-tab"        id="gym_tab_history"  onclick="showGymTab('history')">📅 History</button>
   <button class="gym-tab"        id="gym_tab_progress" onclick="showGymTab('progress')">📈 Progress</button>
-  <button class="btn btn-w btn-sm" style="flex-shrink:0;margin-left:auto" onclick="showGymTab('log')" id="gym_new_session_btn">+ New Session</button>
 </div>
 <!-- ═══ LOG SESSION ═══ -->
 <div id="gym_sec_log" class="gym-sec show">
-  <div class="card">
-    <div class="card-title">Today's Workout</div>
-    <div class="grid2" style="margin-bottom:12px">
-      <div class="fg" style="margin:0">
+  <div class="card" style="padding:12px">
+    <div style="display:flex;gap:8px;margin-bottom:10px">
+      <div class="fg" style="margin:0;flex:0 0 130px">
         <label>Date</label>
-        <input type="date" class="fi" id="gym_log_date">
+        <input type="date" class="fi" id="gym_log_date" style="font-size:12px;padding:7px 8px;min-height:36px">
       </div>
-      <div class="fg" style="margin:0">
-        <label>Session Name (optional)</label>
-        <input class="fi" id="gym_log_name" placeholder="e.g. Push A, Legs, PPL">
+      <div class="fg" style="margin:0;flex:1">
+        <label>Session</label>
+        <input class="fi" id="gym_log_name" placeholder="e.g. Push A, Legs" style="font-size:12px;padding:7px 8px;min-height:36px">
       </div>
     </div>
 
-    <!-- Muscle group selection -->
-    <div style="font-size:11px;color:var(--text3);margin-bottom:8px;text-transform:uppercase;letter-spacing:.4px;font-weight:700">
-      Select Muscle Groups
+    <!-- Muscle group selection — compact 4-column grid -->
+    <div style="font-size:10px;color:var(--text3);margin-bottom:6px;text-transform:uppercase;letter-spacing:.4px;font-weight:700">
+      Target Muscles
     </div>
-    <div class="muscle-row" id="gym_muscle_row">
+    <div id="gym_muscle_row" style="display:grid;grid-template-columns:repeat(4,1fr);gap:5px;margin-bottom:10px">
       <button class="muscle-btn" data-muscle="Chest"      onclick="toggleGymMuscle(this,'Chest')">🫀 Chest</button>
       <button class="muscle-btn" data-muscle="Lats"       onclick="toggleGymMuscle(this,'Lats')">🏋 Lats</button>
       <button class="muscle-btn" data-muscle="Traps"      onclick="toggleGymMuscle(this,'Traps')">🔱 Traps</button>
@@ -1037,13 +1038,13 @@
       <button class="muscle-btn" data-muscle="Biceps"     onclick="toggleGymMuscle(this,'Biceps')">💪 Biceps</button>
       <button class="muscle-btn" data-muscle="Triceps"    onclick="toggleGymMuscle(this,'Triceps')">💥 Triceps</button>
       <button class="muscle-btn" data-muscle="Forearms"   onclick="toggleGymMuscle(this,'Forearms')">🦾 Forearms</button>
-      <button class="muscle-btn" data-muscle="Core"       onclick="toggleGymMuscle(this,'Core')">⚡ Core / Abs</button>
+      <button class="muscle-btn" data-muscle="Core"       onclick="toggleGymMuscle(this,'Core')">⚡ Core</button>
       <button class="muscle-btn" data-muscle="Glutes"     onclick="toggleGymMuscle(this,'Glutes')">🍑 Glutes</button>
       <button class="muscle-btn" data-muscle="Quads"      onclick="toggleGymMuscle(this,'Quads')">🦵 Quads</button>
-      <button class="muscle-btn" data-muscle="Hamstrings" onclick="toggleGymMuscle(this,'Hamstrings')">🦿 Hamstrings</button>
+      <button class="muscle-btn" data-muscle="Hamstrings" onclick="toggleGymMuscle(this,'Hamstrings')">🦿 Hams</button>
       <button class="muscle-btn" data-muscle="Calves"     onclick="toggleGymMuscle(this,'Calves')">🦶 Calves</button>
       <button class="muscle-btn" data-muscle="Cardio"     onclick="toggleGymMuscle(this,'Cardio')">🏃 Cardio</button>
-      <button class="muscle-btn" data-muscle="Full Body"  onclick="toggleGymMuscle(this,'Full Body')">🌐 Full Body</button>
+      <button class="muscle-btn" data-muscle="Full Body"  onclick="toggleGymMuscle(this,'Full Body')">🌐 Full</button>
     </div>
 
     <!-- Exercises from history for selected muscles — populated by JS -->
@@ -1118,7 +1119,7 @@
 
 <!-- ═══ HISTORY ═══ -->
 <div id="gym_sec_history" class="gym-sec">
-  <div class="metric-row" id="gym_hist_summary"></div>
+  <div id="gym_hist_summary"></div>
   <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap">
     <input class="fi" id="gym_hist_search" placeholder="🔍 Search exercise or date…"
       oninput="_gymRenderHistDebounced()" style="flex:1;padding:8px 12px;min-height:36px;font-size:13px">
@@ -8605,12 +8606,10 @@
             var sessions = JSON.parse(localStorage.getItem('gym_sessions') || '[]');
             var templates = JSON.parse(localStorage.getItem('gym_templates') || '[]');
             var lastDate = sessions.length > 0 ? sessions[0].date : '—';
-            el.innerHTML = '<div style="display:flex;gap:8px;flex-wrap:wrap">'
-                + '<div class="metric" style="flex:1;min-width:80px;padding:8px 12px"><div class="metric-lbl">Sessions</div><div class="metric-val" style="font-size:18px">' + sessions.length + '</div></div>'
-                + '<div class="metric" style="flex:1;min-width:80px;padding:8px 12px"><div class="metric-lbl">Last Session</div><div class="metric-val" style="font-size:14px">' + lastDate + '</div></div>'
-                + '<div class="metric" style="flex:1;min-width:80px;padding:8px 12px"><div class="metric-lbl">Templates</div><div class="metric-val" style="font-size:18px">' + templates.length + '</div></div>'
-                + '</div>';
-        } catch(e) { el.innerHTML = ''; }
+            el.textContent = sessions.length + ' sessions · '
+                + templates.length + ' templates'
+                + (sessions.length > 0 ? ' · last: ' + lastDate : '');
+        } catch(e) { el.textContent = ''; }
     }
     function quickCompleteTask(id){
         var tasks=getTasks();if(!tasks[id])return;
@@ -9893,9 +9892,9 @@ function renderGymHistory(){
     .reduce(function(a,s){return a+(s.totalVolume||0);},0);
   var lastDate=sessions.length>0?sessions[0].date:'—';
   document.getElementById('gym_hist_summary').innerHTML=
-    '<div class="metric-chip"><div class="val">'+totalSess+'</div><div class="lbl">Sessions</div></div>'+
-    '<div class="metric-chip"><div class="val">'+Math.round(totalVol/1000)+'t</div><div class="lbl">Total lifted</div></div>'+
-    '<div class="metric-chip"><div class="val" style="font-size:14px">'+lastDate+'</div><div class="lbl">Last session</div></div>';
+    '<div style="font-size:12px;color:var(--text3);margin-bottom:10px">'
+    + totalSess + ' sessions · ' + Math.round(totalVol/1000) + 't total · last: ' + lastDate
+    + '</div>';
 
   if(filtered.length===0){
     document.getElementById('gym_history_list').innerHTML=
@@ -10196,6 +10195,10 @@ function initGymTracker(){
     renderGymTemplates();
     _gymInitialized = true;
   }
+  // Always reset to Log tab when gym section is opened
+  showGymTab('log');
+  // Update compact summary
+  renderHealthGymSummary();
   // Re-show rest bar if a timer was running when user left the health tab
   if (_restActive) {
     var bar = document.getElementById('rest_bar');
