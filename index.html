@@ -516,12 +516,12 @@
         <div class="header-title" id="app_title_header" onclick="showTab('overview')" style="cursor:pointer">My Dashboard</div>
         <div style="display:flex;gap:6px;align-items:center">
             <!-- Sync -->
-            <button onclick="forceSyncFromFirebase();closeSettingsMenu()" class="smenu-item" id="sync_btn">
+            <button onclick="forceSyncFromFirebase();closeSettingsMenu()" class="smenu-item" id="sync_btn" aria-label="Sync data with Firebase">
                 🔄
             </button>
             <!-- Settings menu -->
             <div style="position:relative" id="settings_menu_wrap">
-                <button class="btn btn-w btn-sm" onclick="toggleSettingsMenu()" id="settings_menu_btn" style="font-size:16px;padding:6px 10px">⚙️</button>
+                <button class="btn btn-w btn-sm" onclick="toggleSettingsMenu()" id="settings_menu_btn" style="font-size:16px;padding:6px 10px" aria-label="Open settings menu" aria-haspopup="true" aria-expanded="false">⚙️</button>
                 <div id="settings_menu_dropdown" style="
         display:none;position:absolute;top:calc(100% + 8px);right:0;
         background:var(--bg2);border:0.5px solid var(--border);
@@ -568,13 +568,13 @@
         </div>
 
     </div>
-    <div class="tabs" id="main_tabs">
-        <button class="tab active" id="tab_overview"  onclick="showTab('overview')">Overview</button>
-        <button class="tab"        id="tab_today"     onclick="showTab('today')">Today</button>
-        <button class="tab"        id="tab_health"    onclick="showTab('health')">🏥 Health</button>
-        <button class="tab"        id="tab_expenses"  onclick="showTab('expenses')">Expenses</button>
-        <button class="tab"        id="tab_upskill"   onclick="showTab('upskill')">🚀 Prep</button>
-        <button class="tab"        id="tab_goals"     onclick="showTab('goals')">🎯 Goals</button>
+    <div class="tabs" id="main_tabs" role="tablist">
+        <button class="tab active" id="tab_overview"  onclick="showTab('overview')" role="tab" aria-selected="true"  aria-controls="sec_overview">Overview</button>
+        <button class="tab"        id="tab_today"     onclick="showTab('today')"    role="tab" aria-selected="false" aria-controls="sec_today">Today</button>
+        <button class="tab"        id="tab_health"    onclick="showTab('health')"   role="tab" aria-selected="false" aria-controls="sec_health">🏥 Health</button>
+        <button class="tab"        id="tab_expenses"  onclick="showTab('expenses')" role="tab" aria-selected="false" aria-controls="sec_expenses">Expenses</button>
+        <button class="tab"        id="tab_upskill"   onclick="showTab('upskill')"  role="tab" aria-selected="false" aria-controls="sec_upskill">🚀 Prep</button>
+        <button class="tab"        id="tab_goals"     onclick="showTab('goals')"    role="tab" aria-selected="false" aria-controls="sec_goals">🎯 Goals</button>
     </div>
     <div class="notif-banner" id="notif_banner">
         ⏰ Reminder: Log yesterday's schedule & expenses before 11 AM!
@@ -732,7 +732,7 @@
             <div class="table-wrap">
                 <table id="wp_table">
                     <tr><th>Date</th><th>Weight (kg)</th><th>Change</th><th>Fat %</th><th>Fat (kg)</th><th>Lean (kg)</th><th>Del</th></tr>
-                    <tr><td colspan="7" style="text-align:center;color:#555;padding:16px">No entries yet</td></tr>
+                    <tr><td colspan="7" style="text-align:center;color:var(--text3);padding:16px">No entries yet</td></tr>
                 </table>
             </div>
         </div>
@@ -1279,7 +1279,7 @@
         <div class="card">
             <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:10px">
                 <div class="card-title" style="margin-bottom:0">🗂️ My Things</div>
-                <input class="fi" id="th_search" placeholder="🔍 Search…" oninput="renderThings()" style="width:160px;padding:5px 10px;font-size:12px">
+                <input class="fi" id="th_search" placeholder="🔍 Search…" oninput="_renderThingsDb()" style="width:160px;padding:5px 10px;font-size:12px">
             </div>
             <div id="things_list"></div>
         </div>
@@ -1326,7 +1326,7 @@
         <div class="card">
             <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:10px">
                 <div class="card-title" style="margin-bottom:0">✨ All Sparks</div>
-                <input class="fi" id="sp_search" placeholder="🔍 Search…" oninput="renderSparks()" style="width:160px;padding:5px 10px;font-size:12px">
+                <input class="fi" id="sp_search" placeholder="🔍 Search…" oninput="_renderSparksDb()" style="width:160px;padding:5px 10px;font-size:12px">
             </div>
             <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px">
                 <button class="btn btn-w btn-sm" id="spf_all"     onclick="setSparksFilter('all')"        >All</button>
@@ -1475,7 +1475,7 @@
                 <button class="btn btn-o btn-sm" onclick="fetchExpenseHistory()">Fetch</button>
             </div>
             <div style="margin-top:8px">
-                <input class="fi" id="exp_hist_search" placeholder="🔍 Search transactions…" oninput="filterExpenseHistory()" style="margin-bottom:8px">
+                <input class="fi" id="exp_hist_search" placeholder="🔍 Search transactions…" oninput="_filterExpHistDb()" style="margin-bottom:8px">
             </div>
             <div id="exp_hist_result" style="margin-top:4px"></div>
         </div>
@@ -1978,21 +1978,33 @@
     var _localChangeTime = 0;   // timestamp of last local edit
     var _pendingPush = false;   // true while a push is in-flight
     var _lastSyncTime = null;
+    var _blockAnonAuth = false; // true in readonly mode to prevent anon re-sign-in after signOut
 
     var _initDone = false;
+    var _activeTab = 'overview'; // tracks which tab is visible for smart re-renders
+    var _reRendering = false;    // re-entry guard for reRenderAll
+    var _idSeq = 0;              // monotonic counter for collision-free IDs
 
     function initFirebase() {
       try {
         if (!FB_CONFIG || !FB_CONFIG.apiKey) { if (!_initDone) { _initDone = true; initDashboard(); } return; }
-        if (typeof firebase === 'undefined') { initDashboard(); return; }
+        if (typeof firebase === 'undefined') { if (!_initDone) { _initDone = true; initDashboard(); } return; }
         if (_fbReady) { applyAuthRole(); if (_initDone) reRenderAll(); return; }
         var _existingDefault = firebase.apps && firebase.apps.find(function(a){ return a.name === '[DEFAULT]'; });
         _fbApp = _existingDefault || firebase.initializeApp(FB_CONFIG);
         _fbDb  = firebase.database();
         _fbRef = _fbDb.ref('dashboard/data');
         _fbAuth = firebase.auth();
-        // Restore admin Firebase Auth session on load (so writes work after page reload)
+        // Ensure a Firebase Auth session exists so writes pass "auth != null" rules.
+        // We use anonymous auth — no Firebase Console email/password setup needed.
+        // IMPORTANT: Enable Anonymous Authentication in Firebase Console →
+        //            Authentication → Sign-in method → Anonymous → Enable
         _fbAuth.onAuthStateChanged(function(user) {
+          if (!user && !_blockAnonAuth) {
+            _fbAuth.signInAnonymously().catch(function(err) {
+              console.warn('Firebase anonymous auth failed — enable Anonymous provider in Firebase Console → Authentication → Sign-in method.', err.message);
+            });
+          }
           if (user && _authRole !== 'admin') {
             // Firebase session active but UI role not yet set — happens on reload
             var stored = localStorage.getItem('_auth_role');
@@ -2071,7 +2083,7 @@
             }
           });
           _setKeyTs(localKeyTs);
-          if (anyChanged) reRenderAll();
+          if (anyChanged) reRenderActiveTab();
         });
 
       } catch(e) {
@@ -2137,27 +2149,69 @@
     });
 
     function reRenderAll() {
-      buildSched();
-      buildGrocery();
-      renderTasks();
-      renderExpenses();
-      renderWeight();     // also calls renderWeightChart + updateOverviewMetrics
-      renderLimits();
-      renderExpensePattern();
-      renderOwed();
-      renderScores();
-      renderWeeklyReport();
-      renderCustomGrocery();
-      renderHabits();
-      renderShopping();
-      renderJournal();
-      updateMacroDisplay();
-      renderNutritionSummary();
-      renderCustomIngredients();
-      renderSparks();
-      renderThings();
-      renderBodyTab();
-      applyTabVisibility();
+      if (_reRendering) return;
+      _reRendering = true;
+      try {
+        buildSched();
+        buildGrocery();
+        renderTasks();
+        renderExpenses();
+        renderWeight();     // also calls renderWeightChart + updateOverviewMetrics
+        renderLimits();
+        renderExpensePattern();
+        renderOwed();
+        renderScores();
+        renderWeeklyReport();
+        renderCustomGrocery();
+        renderHabits();
+        renderShopping();
+        renderJournal();
+        updateMacroDisplay();
+        renderNutritionSummary();
+        renderCustomIngredients();
+        renderSparks();
+        renderThings();
+        renderBodyTab();
+        applyTabVisibility();
+      } finally {
+        _reRendering = false;
+      }
+    }
+
+    // Smarter re-render: only refresh the active tab on Firebase live updates
+    function reRenderActiveTab() {
+      if (_reRendering) return;
+      _reRendering = true;
+      try {
+        applyTabVisibility();
+        switch (_activeTab) {
+          case 'overview':
+            renderScores(); updateOverviewMetrics(); renderWeeklyReport();
+            renderCalorieGauge(); renderTodayChecklist();
+            break;
+          case 'today':
+            buildSched(); renderHabits(); renderTasks();
+            break;
+          case 'health':
+            renderBodyTab(); renderNutritionSummary(); updateMacroDisplay(); renderCalorieGauge();
+            break;
+          case 'expenses':
+            renderExpenses(); renderLimits(); renderExpensePattern(); renderOwed();
+            break;
+          case 'upskill':
+            if (typeof renderUpskill === 'function') renderUpskill();
+            if (typeof renderPrepTodayCard === 'function') renderPrepTodayCard();
+            break;
+          case 'goals':
+            buildGrocery(); renderCustomGrocery(); renderShopping();
+            renderThings(); renderSparks(); renderJournal();
+            break;
+          default:
+            reRenderAll();
+        }
+      } finally {
+        _reRendering = false;
+      }
     }
 
     function forceSyncFromFirebase() {
@@ -2171,15 +2225,22 @@
       // Step 1: Push only dirty local keys up first (so no local data is lost)
       var dirty = _getDirtyKeys();
       var dirtyList = Object.keys(dirty).filter(function(k){ return SYNCED_KEYS.indexOf(k) !== -1; });
-      if (dirtyList.length === 0) dirtyList = SYNCED_KEYS.slice();
+      // Only fall back to all keys when there's a known pending push (avoids huge unnecessary writes)
+      if (dirtyList.length === 0 && localStorage.getItem('_ls_pending_push') === '1') {
+        dirtyList = SYNCED_KEYS.slice();
+      }
+      var doUpdate = dirtyList.length > 0;
       var out = {}; var kts = _getKeyTs(); var now = _localChangeTime || parseInt(localStorage.getItem('_ls_local_ts')||'0')||1;
-      dirtyList.forEach(function(k) {
-        var raw = localStorage.getItem(k);
-        out[k] = raw !== null ? (function(){ try{return JSON.parse(raw);}catch(e){return null;} })() : null;
-        out['_key_ts/' + k] = kts[k] || now;
-      });
-      out['_server_ts'] = now;
-      _fbRef.update(out).then(function() {
+      if (doUpdate) {
+        dirtyList.forEach(function(k) {
+          var raw = localStorage.getItem(k);
+          out[k] = raw !== null ? (function(){ try{return JSON.parse(raw);}catch(e){return null;} })() : null;
+          out['_key_ts/' + k] = kts[k] || now;
+        });
+        out['_server_ts'] = now;
+      }
+      var step1 = doUpdate ? _fbRef.update(out) : Promise.resolve();
+      step1.then(function() {
         // Step 2: Pull back from Firebase (now authoritative)
         return _fbRef.once('value');
       }).then(function(snap) {
@@ -2203,7 +2264,7 @@
         }
       }).catch(function(err) {
           if (btn) { btn.textContent = '❌'; setTimeout(function(){ btn.textContent='🔄'; btn.disabled=false; }, 2500); }
-          var detail = (err && err.message) ? err.message : 'Check internet connection or Firebase rules.';
+          var detail = (err && err.message) ? err.message : 'Check internet connection or Firebase rules (auth != null requires Anonymous Auth enabled).';
           // Fallback: at least re-render from local cache
           reRenderAll();
           appToast('⚠️ Sync failed: ' + detail);
@@ -2239,7 +2300,7 @@
         if (arr) arr.textContent = hidden ? '▼' : '▶';
     }
 
-    function showTab(name) {
+    function showTab(name, _fromHistory) {
         // Remap merged tabs
         if (name === 'schedule' || name === 'tasks' || name === 'habits') name = 'today';
         if (name === 'things' || name === 'sparks') name = 'notes';
@@ -2252,14 +2313,20 @@
         if (name === 'body' || name === 'nutrition') name = 'health';
         if (name === 'grocery' || name === 'shopping' || name === 'notes' || name === 'reflect') name = 'goals';
 
+        _activeTab = name;
+        // Push history state for back-button support (skip if called from popstate)
+        if (!_fromHistory) {
+            try { history.pushState({ tab: name }, '', location.href.split('#')[0] + location.hash); } catch(e) {}
+        }
+
         var sections = document.querySelectorAll('.section');
         for (var i = 0; i < sections.length; i++) sections[i].style.display = 'none';
         var tabs = document.querySelectorAll('.tab');
-        for (var i = 0; i < tabs.length; i++) tabs[i].classList.remove('active');
+        for (var i = 0; i < tabs.length; i++) { tabs[i].classList.remove('active'); tabs[i].setAttribute('aria-selected','false'); }
         var sec = document.getElementById('sec_' + name);
         if (sec) sec.style.display = 'block';
         var tab = document.getElementById('tab_' + name);
-        if (tab) tab.classList.add('active');
+        if (tab) { tab.classList.add('active'); tab.setAttribute('aria-selected','true'); }
         if (name === 'overview') { renderScores(); updateOverviewMetrics(); renderWeeklyReport(); renderScoreTrend(30); renderCalorieGauge(); renderTodayChecklist(); }
         if (name === 'today') { ['sched','tasks','habits'].forEach(function(s){var b=document.getElementById('today_'+s+'_body');var a=document.getElementById('today_'+s+'_arr');if(b)b.style.display='none';if(a)a.textContent='▶';}); buildSched(); renderHabits(); renderTasks(); }
         if (name === 'health') { ['body','food'].forEach(function(s){var b=document.getElementById('health_'+s+'_body');var a=document.getElementById('health_'+s+'_arr');if(b)b.style.display='none';if(a)a.textContent='▶';}); renderBodyTab(); initNutritionTab(); renderNutTemplates(); renderNutritionSummary(); renderCalorieGauge(); }
@@ -2438,7 +2505,7 @@
         if (!topicName || !hours) return;
         var today = getTodayISO();
         var sessions = ls_get('study_sessions');
-        if (!sessions[today]) sessions[today] = [];
+        if (!Array.isArray(sessions[today])) sessions[today] = [];
         sessions[today].push({topic: topicName, hours: parseFloat(hours), ts: Date.now()});
         ls_set('study_sessions', sessions);
     }
@@ -2508,7 +2575,7 @@
             html += '<div class=\"form-group\"><label>What did you spend on?</label><input class=\"fi\" id=\"ci_ex_desc\" placeholder=\"e.g. Lunch, Auto\"></div>';
             html += '<div class=\"form-group\"><label>Amount (' + getCurSym() + ')</label><input type=\"number\" class=\"fi\" id=\"ci_ex_amt\" placeholder=\"0\"></div>';
             html += '</div>';
-            html += '<button class=\"btn btn-o\" style=\"width:100%\" onclick=\"var d=document.getElementById(\'ci_ex_desc\').value;var a=document.getElementById(\'ci_ex_amt\').value;if(d&&a){var today=getTodayISO();var ex=getExpenses();var id=String(Date.now());ex[id]={id:id,date:today,desc:d,amt:parseFloat(a),type:\'Variable\',nature:\'essential\',notes:\'\'};ls_set(\'expenses_list\',ex);ciNext();}else{alert(\'Fill both fields or skip\');}\">Save & Continue →</button>';
+            html += '<button class=\"btn btn-o\" style=\"width:100%\" onclick=\"var d=document.getElementById(\'ci_ex_desc\').value;var a=document.getElementById(\'ci_ex_amt\').value;if(d&&a){var today=getTodayISO();var ex=getExpenses();var id=newId();ex[id]={id:id,date:today,desc:d,amt:parseFloat(a),type:\'Variable\',nature:\'essential\',notes:\'\'};ls_set(\'expenses_list\',ex);ciNext();}else{appToast(\'Fill both fields or skip\');}\">Save & Continue →</button>';
         }
         if (el) el.innerHTML = html;
     }
@@ -2538,6 +2605,19 @@
       } catch(e) {}
       schedulePush();
     }
+    // Collision-free ID: timestamp base-36 + monotonic sequence
+    function newId() {
+      return Date['now']().toString(36) + '_' + (++_idSeq).toString(36);
+    }
+    // Debounce helper for search/input handlers
+    function _debounce(fn, ms) {
+      var t;
+      return function() { clearTimeout(t); t = setTimeout(fn, ms); };
+    }
+    // Debounced search callbacks — assigned after functions are defined at script end
+    var _renderThingsDb = _debounce(function(){ renderThings(); }, 200);
+    var _renderSparksDb = _debounce(function(){ renderSparks(); }, 200);
+    var _filterExpHistDb = _debounce(function(){ filterExpenseHistory(); }, 200);
     function flash(id) {
       var el = document.getElementById(id);
       if (!el) return;
@@ -2899,7 +2979,7 @@
     function addDayTypeDef() {
       var labelInput = document.getElementById('dt_mgr_label');
       var label = (labelInput ? labelInput.value.trim() : '');
-      if (!label) { alert('Enter a name for the day type.'); return; }
+      if (!label) { appToast('Enter a name for the day type.'); return; }
       var key = label.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '') || ('dt_' + Date.now());
       var defs = getDayTypeDefs();
       if (defs[key]) { key = key + '_' + Date.now(); }
@@ -2948,7 +3028,7 @@
     function fetchNutritionPast() {
         var s = document.getElementById('nut_past_s').value;
         var e = document.getElementById('nut_past_e').value;
-        if (!s || !e) { alert('Select date range.'); return; }
+        if (!s || !e) { appToast('Select date range.'); return; }
         var log = ls_get('nutrition_log');
         var targets = getDailyMacros();
         var dates = getDates(s, e);
@@ -3059,7 +3139,7 @@
     function addDayTypeRow() {
       var time = (document.getElementById('dt_row_time')||{}).value.trim();
       var task = (document.getElementById('dt_row_task')||{}).value.trim();
-      if (!task) { alert('Enter a task.'); return; }
+      if (!task) { appToast('Enter a task.'); return; }
       var schedules = getDayTypeSchedules();
       var rows = schedules[_selectedDayTypeEdit] || [];
       rows.push({time: time||'', task: task});
@@ -3089,7 +3169,7 @@
     function buildSchedPast() {
   var s = document.getElementById('sd_s').value;
   var e = document.getElementById('sd_e').value;
-  if (!s || !e) { alert('Select date range.'); return; }
+  if (!s || !e) { appToast('Select date range.'); return; }
   var dates = getDates(s, e);
   var data = ls_get('sched');
   var log = getDayTypeLog();
@@ -3199,12 +3279,17 @@
       var rows = schedules[type] || [];
       if (rows.length === 0) return null;
       var data = ls_get('sched');
-      var green = 0;
+      var green = 0, anyLogged = false;
       rows.forEach(function(row, ri) {
         var k = 'sched_' + type + '_' + ri + '_' + dateStr;
-        if ((data[k] || 0) === 1) green++;
+        var v = data[k];
+        if (v !== undefined) anyLogged = true;
+        if (v === 1) green++;
         // v=0 (unlogged) and v=2 (explicitly not done) both count as not done
       });
+      // Return null for today/future if nothing has been logged yet
+      var today = isoD(new Date());
+      if (!anyLogged && dateStr >= today) return null;
       return Math.round((green / rows.length) * 100);
     }
 
@@ -3238,9 +3323,9 @@
       var date = document.getElementById('t_date').value;
       var pri = document.getElementById('t_pri').value;
       var notes = document.getElementById('t_notes').value.trim();
-      if (!name) { alert('Please enter a task name.'); return; }
+      if (!name) { appToast('⚠️ Please enter a task name.'); return; }
       var tasks = getTasks();
-      var id = Date.now().toString();
+      var id = newId();
       tasks[id] = {id:id, name:name, cat:cat, date:date, pri:pri, notes:notes, status:'Todo'};
       ls_set('tasks_active_list', tasks);
       document.getElementById('t_name').value = '';
@@ -3267,7 +3352,7 @@
       var t = tasks[id];
       appPrompt('✅ Task completed!', 'Where / what was the outcome for: "' + t.name + '"', '', function(where) {
         appPrompt('💬 How do you feel?', 'One word or a sentence — e.g. Relieved, Proud, Motivated', '', function(feeling) {
-          var doneId = Date.now().toString();
+          var doneId = newId();
           done[doneId] = { name:t.name, cat:t.cat, completedOn:new Date().toISOString().slice(0,10), where:where, feeling:feeling };
           delete tasks[id];
           ls_set('tasks_active_list', tasks);
@@ -3310,12 +3395,12 @@
       }
       var html = '<tr><th>Task</th><th>Category</th><th>Priority</th><th>Target Date</th><th>Days Left</th><th>Status</th><th>Notes</th><th>Actions</th></tr>';
       if (keys.length === 0) {
-        html += '<tr><td colspan="8" style="text-align:center;color:#444;padding:20px">No active tasks — add one above</td></tr>';
+        html += '<tr><td colspan="8" style="text-align:center;color:var(--text3);padding:20px">No active tasks — add one above</td></tr>';
       }
       keys.forEach(function(id) {
         var t = tasks[id];
         var dl = t.date ? daysLeft(t.date) : null;
-        var dlHtml = dl === null ? '<span style="color:#444">—</span>' :
+        var dlHtml = dl === null ? '<span style="color:var(--text3)">—</span>' :
           dl < 0 ? '<span class="dn">Overdue ' + Math.abs(dl) + 'd</span>' :
           dl <= 3 ? '<span class="ds">' + dl + ' days</span>' :
           '<span class="dok">' + dl + ' days</span>';
@@ -3329,7 +3414,7 @@
         html += '<td>' + dlHtml + '</td>';
         var statusClick = isRO ? '' : ' style="cursor:pointer" onclick="changeStatus(\'' + id + '\')"';
         html += '<td><span class="' + stCls + '"' + statusClick + '>' + (t.status||'Todo') + (isRO ? '' : ' ↻') + '</span></td>';
-        html += '<td style="color:#555;font-size:11px;max-width:120px;overflow:hidden;text-overflow:ellipsis">' + esc(t.notes||'') + '</td>';
+        html += '<td style="color:var(--text3);font-size:11px;max-width:120px;overflow:hidden;text-overflow:ellipsis">' + esc(t.notes||'') + '</td>';
         html += '<td style="white-space:nowrap">';
         if (!isRO) {
           html += '<button class="btn btn-g btn-sm" onclick="completeTask(\'' + id + '\')">✓</button> ';
@@ -3382,11 +3467,11 @@
         var desc = document.getElementById('ex_desc').value.trim();
         var amt = parseFloat(document.getElementById('ex_amt').value);
         var notes = document.getElementById('ex_notes').value.trim();
-        if (!date) { alert('Please select a date.'); return; }
-        if (!desc) { alert('Please enter what you spent on.'); return; }
-        if (!amt || amt <= 0) { alert('Please enter a valid amount.'); return; }
+        if (!date) { appToast('Please select a date.'); return; }
+        if (!desc) { appToast('Please enter what you spent on.'); return; }
+        if (!amt || amt <= 0) { appToast('Please enter a valid amount.'); return; }
         var expenses = getExpenses();
-        var id = Date.now().toString();
+        var id = newId();
         // type and vartype kept for backward-compat with existing records
         var nature = (document.getElementById('ex_nature')||{}).value || 'essential';
         expenses[id] = {id:id, date:date, desc:desc, amt:amt, type:'Variable', vartype:'Variable', notes:notes, nature:nature};
@@ -3525,9 +3610,9 @@
         var amt  = parseFloat(document.getElementById('rec_amt').value);
         var occ  = document.getElementById('rec_occurrence').value;
         var day  = occ === 'recurring' ? (parseInt(document.getElementById('rec_day').value) || 1) : null;
-        if (!name || !amt) { alert('Enter name and amount.'); return; }
+        if (!name || !amt) { appToast('Enter name and amount.'); return; }
         var recs = ls_get('recurring_expenses');
-        var id = Date.now().toString();
+        var id = newId();
         recs[id] = {id:id, name:name, amt:amt, occurrence:occ, day:day, active:true};
         ls_set('recurring_expenses', recs);
         document.getElementById('rec_name').value = '';
@@ -3535,7 +3620,7 @@
         if (occ === 'once') {
             // Log it immediately as a one-time expense
             var expenses = getExpenses();
-            var eid = Date.now().toString() + '_once';
+            var eid = newId() + '_once';
             expenses[eid] = {id:eid, date:isoD(new Date()), desc:name + ' (one-time fixed)', amt:amt, type:'Fixed', vartype:'Fixed', notes:'Auto-logged once'};
             ls_set('expenses_list', expenses);
             renderExpenses();
@@ -3707,7 +3792,7 @@
     function fetchExpenseHistory() {
       var s = document.getElementById('exp_hist_s').value;
       var e = document.getElementById('exp_hist_e').value;
-      if (!s || !e) { alert('Select date range.'); return; }
+      if (!s || !e) { appToast('Select date range.'); return; }
       var expenses = getExpenses();
       var limits = ls_get('exp_limits');
       var keys = Object.keys(expenses).filter(function(id){ return expenses[id].date >= s && expenses[id].date <= e; });
@@ -3724,11 +3809,11 @@
       var date = document.getElementById('wp_date').value;
       var wt = parseFloat(document.getElementById('wp_wt').value);
       var fat = parseFloat(document.getElementById('wp_fat').value);
-      if (!date) { alert('Please select a date.'); return; }
-      if (!wt || wt <= 0) { alert('Please enter weight.'); return; }
+      if (!date) { appToast('Please select a date.'); return; }
+      if (!wt || wt <= 0) { appToast('Please enter weight.'); return; }
       var fatkg = (!isNaN(fat)) ? parseFloat((wt * fat / 100).toFixed(1)) : null;
       var data = ls_get('weight_log');
-      var id = Date.now().toString();
+      var id = newId();
       data[id] = {id:id, date:date, wt:wt, fat:isNaN(fat)?null:fat, fatkg:fatkg};
       ls_set('weight_log', data);
       document.getElementById('wp_wt').value = '';
@@ -3794,7 +3879,7 @@
       if (!tbl) return;
       var html = '<tr><th>Date</th><th>Weight (kg)</th><th>Change</th><th>Fat %</th><th>Fat (kg)</th><th>Del</th></tr>';
       if (keys.length === 0) {
-        html += '<tr><td colspan="6" style="text-align:center;color:#555;padding:16px">No entries yet</td></tr>';
+        html += '<tr><td colspan="6" style="text-align:center;color:var(--text3);padding:16px">No entries yet</td></tr>';
         tbl.innerHTML = html; return;
       }
       // sort ascending for change calc
@@ -3811,7 +3896,7 @@
           var sign = diff > 0 ? '+' : '';
           change = '<span style="' + cls + ';font-weight:700">' + sign + diff + ' kg</span>';
         } else {
-          change = '<span style="color:#555">—</span>';
+          change = '<span style="color:var(--text3)">—</span>';
         }
         html += '<tr>';
         html += '<td style="color:#d4d8e2">' + e.date + '</td>';
@@ -3875,16 +3960,18 @@
         var d = document.getElementById('settings_menu_dropdown');
         if (!d) return;
         var open = d.style.display !== 'none';
+        var btn = document.getElementById('settings_menu_btn');
         if (open) { closeSettingsMenu(); return; }
         // Update last sync time
         var syncTimeEl = document.getElementById('smenu_sync_time');
         if (syncTimeEl && _lastSyncTime) {
-            var diff = Math.round((Date.now() - _lastSyncTime) / 60000);
+            var diff = Math.round((Date['now']() - _lastSyncTime) / 60000);
             syncTimeEl.textContent = diff < 1 ? 'Synced just now' : 'Last synced ' + diff + 'm ago';
         } else if (syncTimeEl) {
             syncTimeEl.textContent = 'Not synced yet this session';
         }
         d.style.display = 'block';
+        if (btn) btn.setAttribute('aria-expanded', 'true');
         setTimeout(function() {
             document.addEventListener('click', _smenuOutside);
         }, 10);
@@ -3893,6 +3980,8 @@
     function closeSettingsMenu() {
         var d = document.getElementById('settings_menu_dropdown');
         if (d) d.style.display = 'none';
+        var btn = document.getElementById('settings_menu_btn');
+        if (btn) btn.setAttribute('aria-expanded', 'false');
         document.removeEventListener('click', _smenuOutside);
     }
 
@@ -4600,12 +4689,12 @@
       var total = parseFloat(document.getElementById('sp_total').value);
       var ways  = Math.max(2, parseInt(document.getElementById('sp_ways').value) || 2);
       var date  = document.getElementById('sp_date').value || getTodayISO();
-      if (!desc || !total) { alert('Fill in description and total amount.'); return; }
+      if (!desc || !total) { appToast('Fill in description and total amount.'); return; }
       calcSplitShare();
       var share = parseFloat(document.getElementById('sp_share').value);
-      if (!share || share <= 0) { alert('Could not calculate share.'); return; }
+      if (!share || share <= 0) { appToast('Could not calculate share.'); return; }
       var ex = getExpenses();
-      var id = String(Date.now());
+      var id = newId();
       ex[id] = { id:id, date:date, desc:desc, amt:share, type:'Variable', nature:(document.getElementById('sp_nature')||{}).value||'nonessential',
                  notes:'Split ' + ways + ' ways — total ' + fmtCur(total) + ', your share: ' + fmtCur(share) };
       ls_set('expenses_list', ex);
@@ -4614,7 +4703,7 @@
       document.getElementById('sp_ways').value    = '2';
       document.getElementById('sp_share').value   = '';
       renderExpenses(); renderExpensePattern();
-      alert('✅ Your share (' + fmtCur(share) + ') saved as expense.');
+      appToast('✅ Your share (' + fmtCur(share) + ') saved as expense.');
     }
 
     function getOwed() {
@@ -4629,7 +4718,7 @@
       var desc=document.getElementById('ow_desc').value.trim();
       var amount=parseFloat(document.getElementById('ow_amount').value);
       var owDate=(document.getElementById('ow_date')||{}).value||getTodayISO();
-      if(!person||!desc||!amount||amount<=0){alert('Fill all fields.');return;}
+      if(!person||!desc||!amount||amount<=0){appToast('Fill all fields.');return;}
       var owed=getOwed();
       var newId=getTodayISO().replace(/-/g,'')+'_'+person.slice(0,4)+String(Object.keys(owed).length);
       owed[newId]={id:newId,date:owDate,direction:direction,person:person,desc:desc,amount:amount};
@@ -4724,7 +4813,7 @@
         var t = document.getElementById('tnm_time').value;
         if (d && t) choice = d + ' ' + t;
       }
-      if (!choice) { alert('Please select a reminder option.'); return; }
+      if (!choice) { appToast('Please select a reminder option.'); return; }
       if (choice === 'off') { closeNotifModal(); clearTaskReminder(taskId); return; }
       // For frequency options, export calendar before closing so _notifTaskId/_notifChoice are still set
       var isFrequency = (choice === '2h' || choice === '4h' || choice === '8h');
@@ -4733,7 +4822,7 @@
       if (Notification.permission !== 'granted') {
         Notification.requestPermission().then(function(p) {
           if (p === 'granted') setTaskReminder(taskId, name, choice);
-          else alert('Allow notifications in Settings → Safari → Notifications.');
+          else appToast('Allow notifications in Settings → Safari → Notifications.');
         });
       } else {
         setTaskReminder(taskId, name, choice);
@@ -4746,7 +4835,7 @@
         var cur = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 7, 0, 0);
         var dayEnd = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 22, 0, 0);
         while (cur <= dayEnd) { slots.push(new Date(cur)); cur.setHours(cur.getHours() + intHours); }
-        alert('✅ Reminder set every ' + choice + ' for "' + name + '"\n\n📅 ' + slots.length + ' calendar events (7 AM – 10 PM) downloaded.\nOpen the .ics file to import into your calendar.');
+        appToast('✅ Reminder set every ' + choice + ' for "' + name + '"\n\n📅 ' + slots.length + ' calendar events (7 AM – 10 PM) downloaded.\nOpen the .ics file to import into your calendar.');
       }
     }
 
@@ -4774,9 +4863,9 @@
       else {
         // specific date-time: "YYYY-MM-DD HH:MM"
         var dt = new Date(choice.replace(' ', 'T'));
-        if (isNaN(dt.getTime())) { alert('Invalid format. Use 2h, 4h, 8h, or "YYYY-MM-DD HH:MM"'); return; }
+        if (isNaN(dt.getTime())) { appToast('Invalid format. Use 2h, 4h, 8h, or "YYYY-MM-DD HH:MM"'); return; }
         var ms = dt - Date.now();
-        if (ms < 0) { alert('That time is in the past!'); return; }
+        if (ms < 0) { appToast('That time is in the past!'); return; }
         var saved = reminders_get();
         saved[taskId] = { name: taskName, intervalMs: 0, choice: choice, nextFireTime: dt.getTime() };
         reminders_set(saved);
@@ -4787,7 +4876,7 @@
           }
           var s = reminders_get(); delete s[taskId]; reminders_set(s);
         }, ms);
-        alert('✅ Reminder set for ' + dt.toLocaleString('en-IN'));
+        appToast('✅ Reminder set for ' + dt.toLocaleString('en-IN'));
         return;
       }
       // Save repeating reminder to localStorage so it survives page reloads
@@ -4850,7 +4939,7 @@
         calEvents_set(calData);
       }
 
-      if (hadTimer || hadSaved || hadCal) alert('🔕 Reminder cancelled.' + (hadCal ? '\n\nOpen the downloaded .ics file to remove calendar events.' : ''));
+      if (hadTimer || hadSaved || hadCal) appToast('🔕 Reminder cancelled.' + (hadCal ? '\n\nOpen the downloaded .ics file to remove calendar events.' : ''));
     }
 
     // Restore reminders after page reload / app reopen
@@ -4918,7 +5007,7 @@
         if (d && t) choice = d + ' ' + t;
       }
       if (!choice || choice === 'off') {
-        if (!silent) alert('Pick a reminder interval first, then tap Add to Calendar.');
+        if (!silent) appToast('Pick a reminder interval first, then tap Add to Calendar.');
         return;
       }
       var tasks = getTasks();
@@ -4941,12 +5030,12 @@
         }
       } else {
         var dt = new Date(choice.replace(' ', 'T'));
-        if (isNaN(dt.getTime())) { if (!silent) alert('Invalid date/time.'); return; }
+        if (isNaN(dt.getTime())) { if (!silent) appToast('Invalid date/time.'); return; }
         slots.push(dt);
       }
 
       if (slots.length === 0) {
-        if (!silent) alert('No reminder slots found in the 7 AM – 10 PM window.');
+        if (!silent) appToast('No reminder slots found in the 7 AM – 10 PM window.');
         return;
       }
 
@@ -4988,7 +5077,7 @@
         var label = slots.length === 1
           ? '1 calendar event added.'
           : slots.length + ' calendar events added (7 AM – 10 PM, every ' + choice + ').';
-        alert('📅 ' + label + '\n\nOpen the downloaded .ics file to import into your calendar.');
+        appToast('📅 ' + label + '\n\nOpen the downloaded .ics file to import into your calendar.');
         closeNotifModal();
       }
     }
@@ -5002,9 +5091,9 @@
       var cat   = document.getElementById('cg_cat').value;
       var freq  = document.getElementById('cg_freq').value;
       var notes = document.getElementById('cg_notes').value.trim();
-      if (!name) { alert('Enter item name.'); return; }
+      if (!name) { appToast('Enter item name.'); return; }
       var list = ls_get('custom_groc');
-      var id = Date.now().toString();
+      var id = newId();
       list[id] = {id:id, name:name, qty:qty, cat:cat, freq:freq, notes:notes};
       ls_set('custom_groc', list);
       document.getElementById('cg_name').value = '';
@@ -5192,7 +5281,7 @@
     function buildGroceryPast() {
       var s = document.getElementById('gr_s').value;
       var e = document.getElementById('gr_e').value;
-      if (!s || !e) { alert('Select date range.'); return; }
+      if (!s || !e) { appToast('Select date range.'); return; }
       var dates = getDates(s, e);
       var list = ls_get('custom_groc');
       var mealItems = Object.keys(list).filter(function(k){ return (list[k].cat||'meal')==='meal'; }).map(function(k){ return list[k]; });
@@ -5214,9 +5303,9 @@
       var time = document.getElementById('hb_time').value.trim();
       var goal = parseInt(document.getElementById('hb_goal').value) || 21;
       var why  = document.getElementById('hb_why').value.trim();
-      if (!name) { alert('Enter habit name.'); return; }
+      if (!name) { appToast('Enter habit name.'); return; }
       var habits = getHabits();
-      var id = Date.now().toString();
+      var id = newId();
       habits[id] = {id:id, name:name, cat:cat, time:time, goal:goal, why:why, startDate: isoD(new Date()), log:{}};
       ls_set('habits_active', habits);
       document.getElementById('hb_name').value = '';
@@ -5243,7 +5332,7 @@
       var done = getDoneHabits();
       if (!habits[hid]) return;
       var h = habits[hid];
-      var id = Date.now().toString();
+      var id = newId();
       done[id] = {name:h.name, cat:h.cat, startDate:h.startDate, doneDate:isoD(new Date()), goal:h.goal};
       delete habits[hid];
       ls_set('habits_active', habits);
@@ -5381,9 +5470,9 @@
       var pri    = document.getElementById('sh_pri').value;
       var budget = parseFloat(document.getElementById('sh_budget').value) || 0;
       var notes  = document.getElementById('sh_notes').value.trim();
-      if (!item) { alert('Enter item name.'); return; }
+      if (!item) { appToast('Enter item name.'); return; }
       var list = getShopItems();
-      var id = Date.now().toString();
+      var id = newId();
       list[id] = {id:id, item:item, forWhom:forWhom, pri:pri, budget:budget, notes:notes};
       ls_set('shop_wishlist', list);
       document.getElementById('sh_item').value = '';
@@ -5402,7 +5491,7 @@
       var budget = list[id].budget || 0;
       appPrompt('🛍️ Mark as bought: ' + itemName, 'How much did you actually spend? (' + getCurSym() + ')', String(budget), function(spentStr) {
         appPrompt('💬 How do you feel about this purchase?', '', 'Happy 😊', function(feeling) {
-          var bid = Date.now().toString();
+          var bid = newId();
           bought[bid] = Object.assign({}, list[id], {boughtOn: isoD(new Date()), spent: parseFloat(spentStr)||0, feeling: feeling});
           delete list[id];
           ls_set('shop_wishlist', list);
@@ -5566,17 +5655,36 @@
         reader.onload = function(e) {
             try {
                 var data = JSON.parse(e.target.result);
+                if (typeof data !== 'object' || Array.isArray(data)) throw new Error('invalid');
                 var count = 0;
+                var dk = {};
                 SYNCED_KEYS.forEach(function(k) {
                     if (k === 'app_config') return;
                     if (data[k] !== undefined) {
-                        try { localStorage.setItem(k, JSON.stringify(data[k])); count++; } catch(er) {}
+                        var val = data[k];
+                        // Basic type sanity: known-object keys must be objects
+                        if (['tasks_active_list','tasks_done_list','expenses_list','exp_limits','weight_log',
+                             'habits_active','habits_done','nutrition_log','nutrition_items',
+                             'shop_wishlist','shop_bought','owed_list','sched'].indexOf(k) !== -1) {
+                            if (typeof val !== 'object' || Array.isArray(val)) return;
+                        }
+                        try { localStorage.setItem(k, JSON.stringify(val)); dk[k] = true; count++; } catch(er) {}
                     }
                 });
+                // Mark all imported keys as dirty so they sync to Firebase
+                try {
+                    var now = Date['now']();
+                    localStorage.setItem('_ls_local_ts', String(now));
+                    localStorage.setItem('_ls_dirty_keys', JSON.stringify(dk));
+                    localStorage.setItem('_ls_pending_push', '1');
+                    var kts = _getKeyTs();
+                    Object.keys(dk).forEach(function(k){ kts[k] = now; });
+                    _setKeyTs(kts);
+                } catch(er) {}
                 appToast('📥 Imported ' + count + ' stores — reloading…');
                 setTimeout(function(){ location.reload(); }, 1500);
             } catch(err) {
-                alert('Import failed — invalid backup file.');
+                appToast('⚠️ Import failed — invalid backup file.');
             }
         };
         reader.readAsText(file);
@@ -6092,13 +6200,13 @@
         html += '<div id="ql_quick_exp" style="display:none;background:var(--bg3);border-radius:10px;padding:10px;margin-bottom:8px">';
         html += '<div style="font-size:11px;color:var(--text3);margin-bottom:6px">Quick Expense</div>';
         html += '<div style="display:flex;gap:6px;margin-bottom:6px"><input class="fi" id="ql_ex_desc" placeholder="Spent on…" style="flex:2;font-size:12px"><input type="number" class="fi" id="ql_ex_amt" placeholder="' + getCurSym() + '" style="flex:1;font-size:12px"></div>';
-        html += '<button class="btn btn-o btn-sm" style="width:100%" onclick="var d=document.getElementById(\'ql_ex_desc\').value;var a=document.getElementById(\'ql_ex_amt\').value;if(d&&a){var today=getTodayISO();var ex=getExpenses();var id=String(Date.now());ex[id]={id:id,date:today,desc:d,amt:parseFloat(a),type:\'Variable\',nature:\'essential\',notes:\'\'};ls_set(\'expenses_list\',ex);document.getElementById(\'ql_ex_desc\').value=\'\';document.getElementById(\'ql_ex_amt\').value=\'\';document.getElementById(\'ql_quick_exp\').style.display=\'none\';renderTodayChecklist();}else{alert(\'Fill both fields\');}">+ Save</button>';
+        html += '<button class="btn btn-o btn-sm" style="width:100%" onclick="var d=document.getElementById(\'ql_ex_desc\').value;var a=document.getElementById(\'ql_ex_amt\').value;if(d&&a){var today=getTodayISO();var ex=getExpenses();var id=newId();ex[id]={id:id,date:today,desc:d,amt:parseFloat(a),type:\'Variable\',nature:\'essential\',notes:\'\'};ls_set(\'expenses_list\',ex);document.getElementById(\'ql_ex_desc\').value=\'\';document.getElementById(\'ql_ex_amt\').value=\'\';document.getElementById(\'ql_quick_exp\').style.display=\'none\';renderTodayChecklist();}else{appToast(\'Fill both fields\');}">+ Save</button>';
         html += '</div>';
         // Inline study session form (hidden by default)
         html += '<div id="ql_quick_study" style="display:none;background:var(--bg3);border-radius:10px;padding:10px;margin-bottom:8px">';
         html += '<div style="font-size:11px;color:var(--text3);margin-bottom:6px">Log Study Session</div>';
         html += '<div style="display:flex;gap:6px;margin-bottom:6px"><input class="fi" id="ql_study_topic" placeholder="Topic…" style="flex:2;font-size:12px"><input type="number" class="fi" id="ql_study_hrs" placeholder="hrs" style="flex:1;font-size:12px" step="0.5"></div>';
-        html += '<button class="btn btn-o btn-sm" style="width:100%" onclick="var t=document.getElementById(\'ql_study_topic\').value;var h=document.getElementById(\'ql_study_hrs\').value;if(t&&h){logStudySession(t,h);document.getElementById(\'ql_study_topic\').value=\'\';document.getElementById(\'ql_study_hrs\').value=\'\';document.getElementById(\'ql_quick_study\').style.display=\'none\';alert(\'Logged: \'+h+\'h on \'+t);}else{alert(\'Fill both fields\');}">+ Log</button>';
+        html += '<button class="btn btn-o btn-sm" style="width:100%" onclick="var t=document.getElementById(\'ql_study_topic\').value;var h=document.getElementById(\'ql_study_hrs\').value;if(t&&h){logStudySession(t,h);document.getElementById(\'ql_study_topic\').value=\'\';document.getElementById(\'ql_study_hrs\').value=\'\';document.getElementById(\'ql_quick_study\').style.display=\'none\';appToast(\'Logged: \'+h+\'h on \'+t);}else{appToast(\'Fill both fields\');}">+ Log</button>';
         html += '</div>';
         if (_authRole === 'admin') {
           html += '<button class="btn btn-w btn-sm" style="width:100%;font-size:11px" onclick="toggleQLEdit()">⚙️ Customise</button>';
@@ -6141,7 +6249,7 @@
       var text = document.getElementById('jrn_text').value.trim();
       var energy = document.getElementById('jrn_energy').value;
       var mood   = document.getElementById('jrn_mood').value;
-      if (!date || !text) { alert('Select a date and write something.'); return; }
+      if (!date || !text) { appToast('Select a date and write something.'); return; }
       var journal = getJournal();
       journal[date] = {date:date, text:text, energy:parseInt(energy)||null, mood:parseInt(mood)||null, saved:Date.now()};
       ls_set('journal_entries', journal);
@@ -6283,14 +6391,11 @@
           document.getElementById('auth_overlay').classList.remove('open');
           applyAuthRole();
           _updateShareableHash();
-          // Sign into Firebase Auth so writes are permitted by Firebase rules
-          if (_fbAuth) {
-            var _email = 'admin@dashboard.local';
-            _fbAuth.signInWithEmailAndPassword(_email, val).catch(function(e) {
-              if (e.code === 'auth/user-not-found' || e.code === 'auth/invalid-credential' || e.code === 'auth/invalid-email') {
-                // First time — create the account
-                _fbAuth.createUserWithEmailAndPassword(_email, val).catch(function(){});
-              }
+          // Ensure Firebase Auth session exists so writes pass "auth != null" rules
+          _blockAnonAuth = false;
+          if (_fbAuth && !_fbAuth.currentUser) {
+            _fbAuth.signInAnonymously().catch(function(e) {
+              console.warn('Firebase anon auth failed:', e.message);
             });
           }
           if (!_fbReady) { initFirebase(); } else { reRenderAll(); }
@@ -6309,8 +6414,11 @@
     }
 
     function applyAuthRole() {
+      // Update Admin Login button label based on current role
+      var adminLoginBtn = document.querySelector('#settings_menu_dropdown button[onclick*="showAdminLogin"]');
       if (_authRole === 'readonly') {
         document.body.classList.add('readonly');
+        _blockAnonAuth = true; // prevent auto-re-sign-in after signOut
         // Sign out of Firebase Auth so writes are blocked at the server level
         if (_fbAuth) { _fbAuth.signOut().catch(function(){}); }
         // Show readonly badge
@@ -6322,16 +6430,18 @@
         }
         // Hide the sync/theme buttons too
         var syncBtn = document.getElementById('sync_btn');
-        var themeBtn = document.getElementById('theme_btn');
         if (syncBtn) syncBtn.style.display = 'none';
+        if (adminLoginBtn) adminLoginBtn.innerHTML = '<span>🔐</span> Switch to Admin mode';
       } else {
         document.body.classList.remove('readonly');
+        _blockAnonAuth = false;
         // Remove the readonly badge if present
         var badge = document.getElementById('ro_badge');
         if (badge) badge.parentNode.removeChild(badge);
         // Restore sync button visibility
         var syncBtn = document.getElementById('sync_btn');
         if (syncBtn) syncBtn.style.display = '';
+        if (adminLoginBtn) adminLoginBtn.innerHTML = '<span>✅</span> Logged in as Admin';
       }
     }
 
@@ -6433,6 +6543,10 @@
 
     window.addEventListener('load', function() {
       initAppTitle();
+      // Back-button support: restore tab from history state
+      window.addEventListener('popstate', function(e) {
+        if (e.state && e.state.tab) showTab(e.state.tab, true);
+      });
       if (isSetupDone()) {
         // Config is already in localStorage — decide routing immediately
         if (checkAuth()) {
@@ -6655,9 +6769,6 @@
       document.addEventListener('visibilitychange', function() {
         if (!document.hidden) restoreTaskReminders();
       });
-
-      // Safety re-render after 300ms to catch any timing edge cases
-      setTimeout(reRenderAll, 300);
     } // end initDashboard
 
     // ═══════════════════════════════════════
@@ -6833,6 +6944,16 @@
         entry.custom = customIds;
         var log = ls_get('nutrition_log');
         if (!log[d]) log[d] = {};
+        if (log[d][_nutCat]) {
+          // Merge macros with existing entry rather than silently overwriting
+          var old = log[d][_nutCat];
+          entry.prot_c = (parseFloat(old.prot_c)||0) + (parseFloat(entry.prot_c)||0);
+          entry.carb_c = (parseFloat(old.carb_c)||0) + (parseFloat(entry.carb_c)||0);
+          entry.fat_c  = (parseFloat(old.fat_c) ||0) + (parseFloat(entry.fat_c) ||0);
+          entry.fib_c  = (parseFloat(old.fib_c) ||0) + (parseFloat(entry.fib_c) ||0);
+          entry.cal_c  = (parseFloat(old.cal_c) ||0) + (parseFloat(entry.cal_c) ||0);
+          if (!entry.dish && old.dish) entry.dish = old.dish;
+        }
         log[d][_nutCat] = entry;
         ls_set('nutrition_log', log);
         renderNutritionLog();
@@ -7005,7 +7126,7 @@
         var cal  = parseFloat(document.getElementById('ci_cal').value)||0;
         if (!name) { appToast('Enter ingredient name.'); return; }
         var items = ls_get('nutrition_items');
-        var id = Date.now().toString();
+        var id = newId();
         items[id] = {id:id, name:name, cat:cat, unit:unit, prot:prot, carb:carb, fat:fat, fib:fib, cal:cal};
         ls_set('nutrition_items', items);
         ['ci_name','ci_unit','ci_prot','ci_carb','ci_fat','ci_fib','ci_cal'].forEach(function(eid) {
@@ -7521,9 +7642,9 @@
         var detail = document.getElementById('th_detail').value.trim();
         var expire = document.getElementById('th_expire').value;
         var pin    = document.getElementById('th_pin').value === '1';
-        if (!title) { alert('Enter something to remember.'); return; }
+        if (!title) { appToast('Enter something to remember.'); return; }
         var things = getThings();
-        var id = Date.now().toString();
+        var id = newId();
         things[id] = {id:id, title:title, cat:cat, detail:detail, expire:expire, pin:pin, created:isoD(new Date())};
         ls_set('things_notes', things);
         document.getElementById('th_title').value = '';
@@ -7630,9 +7751,9 @@
         var desc   = document.getElementById('sp_desc').value.trim();
         var tags   = document.getElementById('sp_tags').value.trim();
         var status = document.getElementById('sp_status').value;
-        if (!title) { alert('Enter a title for this spark.'); return; }
+        if (!title) { appToast('Enter a title for this spark.'); return; }
         var sparks = getSparks();
-        var id = Date.now().toString();
+        var id = newId();
         sparks[id] = {id:id, title:title, type:type, desc:desc,
             tags: tags ? tags.split(',').map(function(t){ return t.trim(); }).filter(Boolean) : [],
             status:status, created: isoD(new Date())};
@@ -8392,7 +8513,7 @@
         if (!date || !type) { appToast('⚠️ Select date and type'); return; }
         var mocks = ls_get('upskill_mocks');
         if (!Array.isArray(mocks)) mocks = [];
-        mocks.unshift({id:Date.now().toString(), date:date, type:type, company:company, result:result, notes:notes});
+        mocks.unshift({id:newId(), date:date, type:type, company:company, result:result, notes:notes});
         ls_set('upskill_mocks', mocks);
         document.getElementById('mock_company').value = '';
         document.getElementById('mock_notes').value   = '';
