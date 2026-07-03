@@ -973,18 +973,6 @@
         </div>
             </div>
         </div>
-        <!-- Danger Zone: Health — always visible, outside all collapsibles -->
-        <div class="card admin-only danger-zone">
-            <div class="dz-title">⚠️ Danger Zone</div>
-            <div class="dz-sub">Permanently erase data. Cannot be undone.</div>
-            <div style="display:flex;flex-wrap:wrap;gap:8px">
-                <button class="btn-erase" onclick="eraseSection('weight')">🗑️ Weight Log</button>
-                <button class="btn-erase" onclick="eraseSection('htargets')">🗑️ Health Targets</button>
-                <button class="btn-erase" onclick="eraseSection('nutlog')">🗑️ Nutrition Log</button>
-                <button class="btn-erase" onclick="eraseSection('nutitems')">🗑️ Saved Items &amp; Templates</button>
-            </div>
-        </div>
-
         <!-- 💪 Gym Tracker sub-section -->
         <div style="margin-bottom:8px">
             <button onclick="(function(){var b=document.getElementById('health_gym_body');var a=document.getElementById('health_gym_arr');var h=b.style.display==='none';b.style.display=h?'block':'none';a.textContent=h?'▼':'▶';if(h)initGymTracker();})()" style="background:var(--bg3);border:0.5px solid var(--border);border-radius:12px;padding:12px 14px;width:100%;display:flex;align-items:center;justify-content:space-between;cursor:pointer;font-size:14px;font-weight:700;color:var(--text1);font-family:inherit;outline:none">
@@ -1165,6 +1153,18 @@
 
             </div>
         </div>
+        <!-- Danger Zone: Health — always visible, outside all collapsibles -->
+        <div class="card admin-only danger-zone">
+            <div class="dz-title">⚠️ Danger Zone</div>
+            <div class="dz-sub">Permanently erase data. Cannot be undone.</div>
+            <div style="display:flex;flex-wrap:wrap;gap:8px">
+                <button class="btn-erase" onclick="eraseSection('weight')">🗑️ Weight Log</button>
+                <button class="btn-erase" onclick="eraseSection('htargets')">🗑️ Health Targets</button>
+                <button class="btn-erase" onclick="eraseSection('nutlog')">🗑️ Nutrition Log</button>
+                <button class="btn-erase" onclick="eraseSection('nutitems')">🗑️ Saved Items &amp; Templates</button>
+            </div>
+        </div>
+
     </div>
 
     <!-- ═══ TODAY ═══ -->
@@ -3477,15 +3477,16 @@
 
     function deleteDayTypeRow(ri) {
       var _delDefs = getDayTypeDefs(); var _delLabel = (_delDefs[_selectedDayTypeEdit] && _delDefs[_selectedDayTypeEdit].label) || _selectedDayTypeEdit || 'this type';
-      if (!confirm('Remove this task from ' + _delLabel + '?')) return;
-      var schedules = getDayTypeSchedules();
-      var rows = schedules[_selectedDayTypeEdit] || [];
-      rows.splice(ri, 1);
-      var _delSaveDefs = getDayTypeDefs();
-      if (_delSaveDefs[_selectedDayTypeEdit]) _delSaveDefs[_selectedDayTypeEdit].schedule = rows;
-      saveDayTypeDefs(_delSaveDefs);
-      renderDayTypeEditList();
-      buildSched();
+      appConfirm('Remove this task from "' + _delLabel + '"?', function() {
+        var schedules = getDayTypeSchedules();
+        var rows = schedules[_selectedDayTypeEdit] || [];
+        rows.splice(ri, 1);
+        var _delSaveDefs = getDayTypeDefs();
+        if (_delSaveDefs[_selectedDayTypeEdit]) _delSaveDefs[_selectedDayTypeEdit].schedule = rows;
+        saveDayTypeDefs(_delSaveDefs);
+        renderDayTypeEditList();
+        buildSched();
+      }, '🗑️ Remove');
     }
 
     function buildSchedPast() {
@@ -3687,11 +3688,12 @@
 
 
     function deleteTask(id) {
-      if (!confirm('Delete this task?')) return;
-      var tasks = getTasks();
-      delete tasks[id];
-      ls_set('tasks_active_list', tasks);
-      renderTasks();
+      appConfirm('Delete this task?', function() {
+        var tasks = getTasks();
+        delete tasks[id];
+        ls_set('tasks_active_list', tasks);
+        renderTasks();
+      }, '🗑️ Delete');
     }
 
     function renderTasks() {
@@ -4149,11 +4151,12 @@
     }
 
     function deleteWeight(id) {
-      if (!confirm('Delete this entry?')) return;
-      var data = ls_get('weight_log');
-      delete data[id];
-      ls_set('weight_log', data);
-      renderWeight();
+      appConfirm('Delete this weight entry?', function() {
+        var data = ls_get('weight_log');
+        delete data[id];
+        ls_set('weight_log', data);
+        renderWeight();
+      }, '🗑️ Delete');
     }
 
     function updateOverviewMetrics() {
@@ -5072,19 +5075,22 @@
       var owed=getOwed();if(!owed[id])return;
       var o=owed[id],dir=o.direction||'i_owe';
       var iOwe=(dir==='i_owe'||dir==='i_borrowed');
-      if(!confirm(iOwe?'Settled to '+o.person+'? Adds expense entry.':'Mark collected from '+o.person+'?'))return;
-      if(iOwe){
-        var ex=getExpenses(),eid=getTodayISO()+'_settle_'+o.person.replace(/s/g,'').slice(0,6);
-        ex[eid]={id:eid,date:getTodayISO(),desc:'Settled: '+o.desc+' to '+o.person,amt:o.amount,type:'Variable',nature:'essential',notes:'Settlement'};
-        ls_set('expenses_list',ex);
-      }
-      delete owed[id];setOwed(owed);renderOwed();renderExpenses();renderExpensePattern();
-      appToast(iOwe?'Settled & logged':'Marked collected');
+      var msg = iOwe ? 'Settled to ' + o.person + '? This will add an expense entry.' : 'Mark collected from ' + o.person + '?';
+      appConfirm(msg, function() {
+        if(iOwe){
+          var ex=getExpenses(),eid=getTodayISO()+'_settle_'+o.person.replace(/s/g,'').slice(0,6);
+          ex[eid]={id:eid,date:getTodayISO(),desc:'Settled: '+o.desc+' to '+o.person,amt:o.amount,type:'Variable',nature:'essential',notes:'Settlement'};
+          ls_set('expenses_list',ex);
+        }
+        delete owed[id];setOwed(owed);renderOwed();renderExpenses();renderExpensePattern();
+        appToast(iOwe?'Settled & logged':'Marked collected');
+      }, iOwe ? '✅ Settle & Log' : '✅ Mark Collected', false);
     }
 
     function deleteOwed(id) {
-      if (!confirm('Remove this entry without settling?')) return;
-      var owed = getOwed(); delete owed[id]; setOwed(owed); renderOwed();
+      appConfirm('Remove this entry without settling?', function() {
+        var owed = getOwed(); delete owed[id]; setOwed(owed); renderOwed();
+      }, '🗑️ Remove');
     }
 
     function renderOwed() {
@@ -5679,11 +5685,12 @@
     }
 
     function deleteHabit(hid) {
-      if (!confirm('Delete this habit?')) return;
-      var habits = getHabits();
-      delete habits[hid];
-      ls_set('habits_active', habits);
-      renderHabits();
+      appConfirm('Delete this habit and all its history?', function() {
+        var habits = getHabits();
+        delete habits[hid];
+        ls_set('habits_active', habits);
+        renderHabits();
+      }, '🗑️ Delete');
     }
 
     function renderHabits() {
@@ -5839,11 +5846,12 @@
     }
 
     function deleteShopItem(id) {
-      if (!confirm('Remove from wish list?')) return;
-      var list = getShopItems();
-      delete list[id];
-      ls_set('shop_wishlist', list);
-      renderShopping();
+      appConfirm('Remove from wish list?', function() {
+        var list = getShopItems();
+        delete list[id];
+        ls_set('shop_wishlist', list);
+        renderShopping();
+      }, '🗑️ Remove');
     }
 
     function renderShopping() {
@@ -7511,11 +7519,12 @@
     }
 
     function deleteCustomIngredient(id) {
-        if (!confirm('Delete this ingredient?')) return;
-        var items = ls_get('nutrition_items');
-        delete items[id];
-        ls_set('nutrition_items', items);
-        renderCustomIngredients();
+        appConfirm('Delete this ingredient?', function() {
+            var items = ls_get('nutrition_items');
+            delete items[id];
+            ls_set('nutrition_items', items);
+            renderCustomIngredients();
+        }, '🗑️ Delete');
     }
 
     function renderCustomIngredients() {
@@ -8164,11 +8173,12 @@
     }
 
     function deleteSpark(id) {
-        if (!confirm('Delete this spark?')) return;
-        var sparks = getSparks();
-        delete sparks[id];
-        ls_set('sparks', sparks);
-        renderSparks();
+        appConfirm('Delete this spark?', function() {
+            var sparks = getSparks();
+            delete sparks[id];
+            ls_set('sparks', sparks);
+            renderSparks();
+        }, '🗑️ Delete');
     }
 
     function updateSparkStatus(id, status) {
@@ -8484,13 +8494,14 @@
         savePrepPlanData(plan);closeCategoryModal();renderUpskill();appToast(catId?'✅ Category updated!':'✅ Category created!');
     }
     function deletePrepCategory(catId){
-        if(!confirm('Delete this entire category and all its topics?'))return;
-        var plan=getPrepPlanData().filter(function(p){return p.id!==catId;});
-        savePrepPlanData(plan);
-        var prog=ls_get('upskill_progress'),notes=ls_get('upskill_notes'),custom=ls_get('upskill_custom');
-        (custom[catId]||[]).forEach(function(t){delete prog[t.id];delete notes[t.id];});
-        ls_set('upskill_progress',prog);ls_set('upskill_notes',notes);
-        renderUpskill();appToast('🗑️ Category deleted');
+        appConfirm('Delete this entire category and all its topics?', function() {
+            var plan=getPrepPlanData().filter(function(p){return p.id!==catId;});
+            savePrepPlanData(plan);
+            var prog=ls_get('upskill_progress'),notes=ls_get('upskill_notes'),custom=ls_get('upskill_custom');
+            (custom[catId]||[]).forEach(function(t){delete prog[t.id];delete notes[t.id];});
+            ls_set('upskill_progress',prog);ls_set('upskill_notes',notes);
+            renderUpskill();appToast('🗑️ Category deleted');
+        }, '🗑️ Delete Category');
     }
     function openPrepMetaModal(){
         var meta=ls_get('upskill_meta'),m=document.getElementById('prep_meta_modal');if(!m)return;
@@ -8944,14 +8955,14 @@
     }
 
     function deleteCustomTopic(phaseId, topicId) {
-        if (!confirm('Delete this custom topic?')) return;
-        var custom = ls_get('upskill_custom');
-        if (custom[phaseId]) custom[phaseId] = custom[phaseId].filter(function(t){ return t.id !== topicId; });
-        ls_set('upskill_custom', custom);
-        // Also remove progress and notes
-        var prog = ls_get('upskill_progress'); delete prog[topicId]; ls_set('upskill_progress', prog);
-        var notes = ls_get('upskill_notes'); delete notes[topicId]; ls_set('upskill_notes', notes);
-        renderUpskill();
+        appConfirm('Delete this custom topic?', function() {
+            var custom = ls_get('upskill_custom');
+            if (custom[phaseId]) custom[phaseId] = custom[phaseId].filter(function(t){ return t.id !== topicId; });
+            ls_set('upskill_custom', custom);
+            var prog = ls_get('upskill_progress'); delete prog[topicId]; ls_set('upskill_progress', prog);
+            var notes = ls_get('upskill_notes'); delete notes[topicId]; ls_set('upskill_notes', notes);
+            renderUpskill();
+        }, '🗑️ Delete');
     }
 
     // ═══════════════════════════════════════
@@ -9910,9 +9921,10 @@ function isGymPersonalRecord(date,exName,weight,reps){
 }
 
 function deleteGymSession(id){
-  if(!confirm('Delete this session?'))return;
-  saveSessions(getSessions().filter(function(s){return s.id!==id;}));
-  renderGymHistory();appToast('🗑️ Session deleted');
+  appConfirm('Delete this gym session?', function() {
+    saveSessions(getSessions().filter(function(s){return s.id!==id;}));
+    renderGymHistory();appToast('🗑️ Session deleted');
+  }, '🗑️ Delete');
 }
 
 // ─── PROGRESS ─────────────────────────────────────────────────────────────────
