@@ -586,19 +586,7 @@
 
     <!-- ═══ OVERVIEW ═══ -->
     <div id="sec_overview" class="section">
-        <!-- Slim status strip: weight + fat only — full details in Body tab -->
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px">
-            <div class="metric" onclick="showTab('body')" style="cursor:pointer">
-                <div class="metric-lbl">Weight <span style="font-size:9px;color:var(--accent)">→ Body</span></div>
-                <div class="metric-val" id="ov_wt" style="color:#60a5fa">—</div>
-                <div class="metric-sub" id="ov_wt_sub">Tap to view</div>
-            </div>
-            <div class="metric" onclick="showTab('body')" style="cursor:pointer">
-                <div class="metric-lbl">Body Fat <span style="font-size:9px;color:var(--accent)">→ Body</span></div>
-                <div class="metric-val" id="ov_fat" style="color:#f87171">—</div>
-                <div class="metric-sub" id="ov_fat_sub">Tap to view</div>
-            </div>
-        </div>
+        <!-- Score of the Day -->
         <div class="card">
             <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:8px">
                 <div class="card-title" style="margin-bottom:0">🏆 Score of the Day</div>
@@ -620,13 +608,24 @@
                 Circles show score for selected date. Select any past date to view history.
             </div>
         </div>
+
+        <!-- MONTHLY INTENTIONS (moved from Goals) -->
+        <div class="card" id="ov_intentions_card">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+                <div class="card-title" style="margin-bottom:0">🔥 This Month's Focus</div>
+                <button class="btn btn-w btn-sm admin-only" onclick="showTab('goals');setTimeout(function(){var b=document.getElementById('g_focus_body');if(b)b.style.display='block';},200)" style="font-size:10px">✏️ Edit</button>
+            </div>
+            <div id="ov_focus_display" style="font-size:13px;color:var(--text2);line-height:1.8">
+                <!-- rendered by renderOverviewFocus() -->
+            </div>
+        </div>
+
         <!-- WHAT'S LEFT TODAY -->
         <div class="card">
             <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
                 <div class="card-title" style="margin-bottom:0">📋 What's Left Today</div>
                 <button class="btn btn-w btn-sm" onclick="renderTodayChecklist()" style="font-size:10px">↻</button>
             </div>
-            <button class="btn btn-o" style="width:100%;margin-bottom:10px;padding:12px;font-size:14px;font-weight:700;border-radius:12px" onclick="openDailyCheckin()">✅ Daily Check-in</button>
             <div id="today_checklist"><!-- rendered by renderTodayChecklist() --></div>
         </div>
         <!-- CALORIES -->
@@ -884,6 +883,28 @@
                 <button class="btn-erase" onclick="eraseSection('nutitems')">🗑️ Saved Items &amp; Templates</button>
             </div>
         </div>
+
+        <!-- 💪 Gym Tracker sub-section -->
+        <div style="margin-bottom:8px">
+            <button onclick="(function(){var b=document.getElementById('health_gym_body');var a=document.getElementById('health_gym_arr');var h=b.style.display==='none';b.style.display=h?'block':'none';a.textContent=h?'▼':'▶';})()" style="background:var(--bg3);border:0.5px solid var(--border);border-radius:12px;padding:12px 14px;width:100%;display:flex;align-items:center;justify-content:space-between;cursor:pointer;font-size:14px;font-weight:700;color:var(--text1);font-family:inherit;outline:none">
+                <span>💪 Gym Tracker</span><span id="health_gym_arr">▶</span>
+            </button>
+            <div id="health_gym_body" style="display:none;margin-top:8px">
+                <div class="card">
+                    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:8px">
+                        <div class="card-title" style="margin-bottom:0">💪 Gym Sessions</div>
+                        <div style="display:flex;gap:6px;flex-wrap:wrap">
+                            <button class="btn btn-w btn-sm admin-only" onclick="clearGymData('sessions')" style="font-size:11px;color:var(--red)">🗑️ Clear Sessions</button>
+                            <button class="btn btn-w btn-sm admin-only" onclick="clearGymData('templates')" style="font-size:11px;color:var(--red)">🗑️ Clear Templates</button>
+                        </div>
+                    </div>
+                    <div id="health_gym_summary" style="margin-bottom:12px"></div>
+                    <div style="height:calc(80vh - 100px);min-height:400px;border-radius:10px;overflow:hidden;border:0.5px solid var(--border)">
+                        <iframe id="gym_iframe" src="gym.html" style="width:100%;height:100%;border:none;background:var(--bg)"></iframe>
+                    </div>
+                </div>
+            </div>
+        </div>
     </div>
 
     <!-- ═══ TODAY ═══ -->
@@ -1039,20 +1060,19 @@
 
     <!-- ═══ GOALS 🎯 ═══ -->
     <div id="sec_goals" class="section">
-        <!-- This Month's Focus -->
-        <div class="card">
+        <!-- This Month's Focus — edit form lives here, display is on Overview -->
+        <div class="card admin-only">
             <div class="card-title" onclick="toggleGoalsCard('g_focus_body')" style="cursor:pointer;display:flex;align-items:center;justify-content:space-between;margin-bottom:0">
-              <span>🔥 This Month's Focus</span><span id="g_focus_body_arr">▼</span>
+              <span>🔥 Edit Monthly Intentions</span><span id="g_focus_body_arr">▶</span>
             </div>
-            <div id="g_focus_body" style="margin-top:10px">
-            <div style="font-size:11px;color:var(--text3);margin-bottom:10px">3 intentions for this month — what matters most right now?</div>
+            <div id="g_focus_body" style="display:none;margin-top:10px">
+            <div style="font-size:11px;color:var(--text3);margin-bottom:10px">3 intentions for this month — shown on the Overview tab.</div>
             <div id="focus_display"></div>
-            <div id="focus_edit" style="display:none">
+            <div id="focus_edit">
                 <div class="form-group" style="margin-bottom:8px"><label>Intention 1</label><input class="fi" id="focus_1" placeholder="e.g. Exercise every day without skipping"></div>
                 <div class="form-group" style="margin-bottom:8px"><label>Intention 2</label><input class="fi" id="focus_2" placeholder="e.g. Log food every day"></div>
                 <div class="form-group" style="margin-bottom:10px"><label>Intention 3</label><input class="fi" id="focus_3" placeholder="e.g. Sleep before 11 PM"></div>
                 <button class="btn btn-o btn-sm" onclick="saveFocus()">Save Intentions</button>
-                <button class="btn btn-w btn-sm" onclick="document.getElementById('focus_edit').style.display='none';document.getElementById('focus_display').style.display='block'">Cancel</button>
             </div>
             </div>
         </div>
@@ -1678,10 +1698,15 @@
         <div class="card admin-only danger-zone">
             <div class="dz-title">⚠️ Danger Zone</div>
             <div class="dz-sub">Permanently erase data. Cannot be undone.</div>
-            <div style="display:flex;flex-wrap:wrap;gap:8px">
+            <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:10px">
                 <button class="btn-erase" onclick="eraseSection('prep')">🗑️ All Prep Progress &amp; Notes</button>
-                <button class="btn-erase" onclick="eraseAllPrepCategories()">Reset Categories</button>
-                <button class="btn-erase" onclick="eraseAllPrepData()">Erase Everything</button>
+                <button class="btn-erase" onclick="eraseAllPrepCategories()">🔄 Reset to Default</button>
+                <button class="btn-erase" onclick="eraseAllPrepData()">🗑️ Erase Everything</button>
+            </div>
+            <div style="background:rgba(52,199,89,0.07);border:0.5px solid rgba(52,199,89,.25);border-radius:8px;padding:8px 10px">
+                <div style="font-size:11px;color:var(--green);font-weight:700;margin-bottom:4px">💾 Save as My Default</div>
+                <div style="font-size:10px;color:var(--text3);margin-bottom:6px">"Reset to Default" will restore exactly your current categories &amp; topics.</div>
+                <button class="btn btn-g btn-sm admin-only" onclick="saveCurrentPlanAsDefault()">⭐ Save Current Plan as Default</button>
             </div>
         </div>
 
@@ -2181,6 +2206,8 @@
         renderThings();
         renderBodyTab();
         applyTabVisibility();
+        renderOverviewFocus();
+        renderHealthGymSummary();
       } finally {
         _reRendering = false;
       }
@@ -2357,7 +2384,7 @@
         if (sec) sec.style.display = 'block';
         var tab = document.getElementById('tab_' + name);
         if (tab) { tab.classList.add('active'); tab.setAttribute('aria-selected','true'); }
-        if (name === 'overview') { renderScores(); updateOverviewMetrics(); renderWeeklyReport(); renderScoreTrend(30); renderCalorieGauge(); renderTodayChecklist(); }
+        if (name === 'overview') { renderScores(); updateOverviewMetrics(); renderWeeklyReport(); renderScoreTrend(30); renderCalorieGauge(); renderTodayChecklist(); renderOverviewFocus(); }
         if (name === 'today') { ['sched','tasks','habits'].forEach(function(s){var b=document.getElementById('today_'+s+'_body');var a=document.getElementById('today_'+s+'_arr');if(b)b.style.display='none';if(a)a.textContent='▶';}); buildSched(); renderHabits(); renderTasks(); }
         if (name === 'health') { ['body','food'].forEach(function(s){var b=document.getElementById('health_'+s+'_body');var a=document.getElementById('health_'+s+'_arr');if(b)b.style.display='none';if(a)a.textContent='▶';}); renderBodyTab(); initNutritionTab(); renderNutTemplates(); renderNutritionSummary(); renderCalorieGauge(); }
         if (name === 'upskill') { renderUpskill(); renderPrepTodayCard(); }
@@ -2942,7 +2969,7 @@
       keys.forEach(function(k) {
         html += '<button class="btn btn-w" id="dt_' + k + '" onclick="setDayType(\'' + k + '\')" style="min-width:90px">' + esc(defs[k].label || k) + '</button>';
       });
-      html += '<button class="btn btn-w btn-sm admin-only" onclick="openDayTypeManager()" style="min-width:40px;padding:6px 10px" title="Manage Day Types">⚙️</button>';
+      // ⚙️ icon removed — use the dedicated "Manage Day Types" button below
       container.innerHTML = html;
     }
 
@@ -3026,21 +3053,23 @@
       var defs = getDayTypeDefs();
       if (!defs[key]) return;
       var current = defs[key].label || key;
-      var newLabel = prompt('Rename "' + current + '" to:', current);
-      if (!newLabel || !newLabel.trim()) return;
-      defs[key].label = newLabel.trim();
-      saveDayTypeDefs(defs);
-      renderDayTypeManagerList();
-      renderDayTypeButtons();
-      renderDayTypeEditButtons();
-      buildSched();
+      appPrompt('✏️ Rename Day Type', 'New name for "' + current + '":', current, function(newLabel) {
+        if (!newLabel || !newLabel.trim()) return;
+        defs[key].label = newLabel.trim();
+        saveDayTypeDefs(defs);
+        renderDayTypeManagerList();
+        renderDayTypeButtons();
+        renderDayTypeEditButtons();
+        buildSched();
+        appToast('✅ Renamed to "' + newLabel.trim() + '"');
+      });
     }
 
     function deleteDayTypeDef(key) {
       var defs = getDayTypeDefs();
       if (!defs[key]) return;
       var label = defs[key].label || key;
-      if (!confirm('Delete day type "' + label + '"? This removes its schedule template but does NOT erase past log entries.')) return;
+      /* skip - handled by appConfirm pattern */ if(!window.confirm('Delete day type "'+label+'"?'))return;
       delete defs[key];
       saveDayTypeDefs(defs);
       var remaining = Object.keys(defs);
@@ -3514,14 +3543,19 @@
         var tagEl = document.getElementById('ex_tag'); if (tagEl) tagEl.value = '';
         var natEl = document.getElementById('ex_nature'); if (natEl) natEl.value = 'essential';
         renderExpenses();
+        renderLimits();          // update budget progress bars immediately
+        renderExpensePattern();  // update monthly breakdown immediately
+        renderCalorieGauge();    // refresh overview calorie gauge
+        if (_activeTab === 'overview') { updateOverviewMetrics(); }
     }
 
     function deleteExpense(id) {
-      if (!confirm('Delete this expense?')) return;
-      var expenses = getExpenses();
-      delete expenses[id];
-      ls_set('expenses_list', expenses);
-      renderExpenses();
+      appConfirm('Delete this expense?', function() {
+        var expenses = getExpenses();
+        delete expenses[id];
+        ls_set('expenses_list', expenses);
+        renderExpenses();
+      }, '🗑️ Delete');
     }
 
     function renderExpenses() {
@@ -4690,7 +4724,13 @@
     function eraseSection(sectionKey) {
       var s = _ERASE[sectionKey];
       if (!s) return;
-      if (!confirm('⚠️ Erase all "' + s.label + '" data?\n\nThis is permanent and cannot be undone.')) return;
+      var _confirmMsg = '⚠️ Erase all "' + s.label + '" data? This cannot be undone.';
+      document.getElementById('app_confirm_sub').textContent = 'All data in this section will be permanently deleted.';
+      appConfirm(_confirmMsg, function() {
+        s.keys.forEach(function(k) { try { ls_set(k, {}); } catch(e) {} });
+        if (s.cb) s.cb();
+      }, '🗑️ Erase', true);
+      return; // appConfirm is async
       // Use ls_set({}) instead of removeItem so the timestamp gets bumped and
       // the erasure is treated as a local write — it will be pushed to Firebase,
       // preventing the next sync from restoring the old data.
@@ -5640,6 +5680,30 @@
       setTimeout(function(){ inp.focus(); }, 300);
     }
 
+    // App-style confirmation dialog (replaces browser confirm())
+    var _appConfirmCb = null;
+    function appConfirm(msg, onConfirm, okLabel, danger) {
+      var overlay = document.getElementById('app_confirm_overlay');
+      if (!overlay) { if (confirm(msg)) onConfirm(); return; }
+      _appConfirmCb = onConfirm;
+      document.getElementById('app_confirm_msg').textContent = msg;
+      var okBtn = document.getElementById('app_confirm_ok_btn');
+      if (okBtn) {
+        okBtn.textContent = okLabel || 'Confirm';
+        okBtn.className = 'btn ' + (danger !== false ? 'btn-r' : 'btn-o');
+        okBtn.style.flex = '1';
+      }
+      overlay.style.display = 'flex';
+    }
+    function _appConfirmClose() {
+      var overlay = document.getElementById('app_confirm_overlay');
+      if (overlay) overlay.style.display = 'none';
+      _appConfirmCb = null;
+    }
+    function _appConfirmDo() {
+      var cb = _appConfirmCb; _appConfirmClose(); if (cb) cb();
+    }
+
     function apromptConfirm() {
       var val = document.getElementById('aprompt_input').value.trim();
       document.getElementById('aprompt_overlay').classList.remove('open');
@@ -6230,18 +6294,29 @@
         html += '<button class="btn btn-w" style="padding:12px 8px;font-size:13px;text-align:left;border-radius:10px" onclick="document.getElementById(\'ql_quick_study\').style.display=document.getElementById(\'ql_quick_study\').style.display===\'none\'?\'block\':\'none\'">' + '📚 Study Session</button>';
         // Daily check-in
         html += '<button class="btn btn-w" style="padding:12px 8px;font-size:13px;text-align:left;border-radius:10px;background:rgba(255,107,0,0.12);border-color:var(--accent)" onclick="closeQuickLog();openDailyCheckin()">✅ Daily Check-in</button>';
+        // Quick weight log
+        html += '<button class="btn btn-w" style="padding:12px 8px;font-size:13px;text-align:left;border-radius:10px" onclick="document.getElementById(\'ql_quick_weight\').style.display=document.getElementById(\'ql_quick_weight\').style.display===\'none\'?\'block\':\'none\'">⚖️ Log Weight</button>';
         html += '</div>';
         // Inline expense mini-form (hidden by default)
         html += '<div id="ql_quick_exp" style="display:none;background:var(--bg3);border-radius:10px;padding:10px;margin-bottom:8px">';
         html += '<div style="font-size:11px;color:var(--text3);margin-bottom:6px">Quick Expense</div>';
         html += '<div style="display:flex;gap:6px;margin-bottom:6px"><input class="fi" id="ql_ex_desc" placeholder="Spent on…" style="flex:2;font-size:12px"><input type="number" class="fi" id="ql_ex_amt" placeholder="' + getCurSym() + '" style="flex:1;font-size:12px"></div>';
-        html += '<button class="btn btn-o btn-sm" style="width:100%" onclick="var d=document.getElementById(\'ql_ex_desc\').value;var a=document.getElementById(\'ql_ex_amt\').value;if(d&&a){var today=getTodayISO();var ex=getExpenses();var id=newId();ex[id]={id:id,date:today,desc:d,amt:parseFloat(a),type:\'Variable\',nature:\'essential\',notes:\'\'};ls_set(\'expenses_list\',ex);document.getElementById(\'ql_ex_desc\').value=\'\';document.getElementById(\'ql_ex_amt\').value=\'\';document.getElementById(\'ql_quick_exp\').style.display=\'none\';renderTodayChecklist();}else{appToast(\'Fill both fields\');}">+ Save</button>';
+        html += '<button class="btn btn-o btn-sm" style="width:100%" onclick="var d=document.getElementById(\'ql_ex_desc\').value;var a=document.getElementById(\'ql_ex_amt\').value;if(d&&a){var today=getTodayISO();var ex=getExpenses();var id=newId();ex[id]={id:id,date:today,desc:d,amt:parseFloat(a),type:\'Variable\',nature:\'essential\',notes:\'\'};ls_set(\'expenses_list\',ex);document.getElementById(\'ql_ex_desc\').value=\'\';document.getElementById(\'ql_ex_amt\').value=\'\';document.getElementById(\'ql_quick_exp\').style.display=\'none\';renderTodayChecklist();renderLimits();renderExpensePattern();appToast(\'💸 Expense saved!\');}else{appToast(\'Fill both fields\');}">+ Save</button>';
         html += '</div>';
         // Inline study session form (hidden by default)
         html += '<div id="ql_quick_study" style="display:none;background:var(--bg3);border-radius:10px;padding:10px;margin-bottom:8px">';
         html += '<div style="font-size:11px;color:var(--text3);margin-bottom:6px">Log Study Session</div>';
         html += '<div style="display:flex;gap:6px;margin-bottom:6px"><input class="fi" id="ql_study_topic" placeholder="Topic…" style="flex:2;font-size:12px"><input type="number" class="fi" id="ql_study_hrs" placeholder="hrs" style="flex:1;font-size:12px" step="0.5"></div>';
         html += '<button class="btn btn-o btn-sm" style="width:100%" onclick="var t=document.getElementById(\'ql_study_topic\').value;var h=document.getElementById(\'ql_study_hrs\').value;if(t&&h){logStudySession(t,h);document.getElementById(\'ql_study_topic\').value=\'\';document.getElementById(\'ql_study_hrs\').value=\'\';document.getElementById(\'ql_quick_study\').style.display=\'none\';appToast(\'Logged: \'+h+\'h on \'+t);}else{appToast(\'Fill both fields\');}">+ Log</button>';
+        html += '</div>';
+        // Quick weight log form
+        html += '<div id="ql_quick_weight" style="display:none;background:var(--bg3);border-radius:10px;padding:10px;margin-bottom:8px">';
+        html += '<div style="font-size:11px;color:var(--text3);margin-bottom:6px">Quick Weight Log</div>';
+        html += '<div style="display:flex;gap:6px;margin-bottom:6px">';
+        html += '<input type="number" class="fi" id="ql_wt_val" placeholder="Weight (kg)" style="flex:2;font-size:12px" step="0.1">';
+        html += '<input type="number" class="fi" id="ql_fat_val" placeholder="Fat %" style="flex:1;font-size:12px" step="0.1">';
+        html += '</div>';
+        html += '<button class="btn btn-o btn-sm" style="width:100%" onclick="(function(){var w=parseFloat(document.getElementById(\'ql_wt_val\').value);var f=parseFloat(document.getElementById(\'ql_fat_val\').value)||null;if(!w){appToast(\'Enter weight\');return;}var log=ls_get(\'weight_log\');var today=getTodayISO();var id=newId();log[id]={id:id,date:today,wt:w,fat:f,fatkg:f?Math.round(w*f/100*10)/10:null};ls_set(\'weight_log\',log);document.getElementById(\'ql_quick_weight\').style.display=\'none\';renderBodyTab();appToast(\'⚖️ Weight logged: \'+w+\'kg\');})()">+ Log</button>';
         html += '</div>';
         if (_authRole === 'admin') {
           html += '<button class="btn btn-w btn-sm" style="width:100%;font-size:11px" onclick="toggleQLEdit()">⚙️ Customise</button>';
@@ -6295,11 +6370,12 @@
     }
 
     function deleteJournalEntry(date) {
-      if (!confirm('Delete entry for ' + date + '?')) return;
-      var journal = getJournal();
-      delete journal[date];
-      ls_set('journal_entries', journal);
-      renderJournal();
+      appConfirm('Delete journal entry for ' + date + '?', function() {
+        var journal = getJournal();
+        delete journal[date];
+        ls_set('journal_entries', journal);
+        renderJournal();
+      }, '🗑️ Delete');
     }
 
     function renderJournal() {
@@ -6763,6 +6839,8 @@
 
       // Show overview first
       showTab('overview');
+      renderOverviewFocus();
+      renderHealthGymSummary();
 
       // Build trackers (3-day auto view)
       renderDayTypeButtons();
@@ -7513,6 +7591,29 @@
     // ═══════════════════════════════════════
     function getFocus() { return ls_get('monthly_focus'); }
 
+    // Render focus/intentions on the Overview tab
+    function renderOverviewFocus() {
+        var el = document.getElementById('ov_focus_display');
+        if (!el) return;
+        var focus = getFocus();
+        var curMonth = isoD(new Date()).slice(0,7);
+        var data = focus[curMonth] || {};
+        var html = '';
+        var hasAny = data['1'] || data['2'] || data['3'];
+        if (!hasAny) {
+            html = '<div style="font-size:12px;color:var(--text3)">No intentions set for this month. <button class="btn btn-w btn-sm admin-only" style="font-size:11px;margin-left:6px" onclick="showTab(\'goals\');setTimeout(function(){var b=document.getElementById(\'g_focus_body\');if(b){b.style.display=\'block\';}},200)">+ Set now</button></div>';
+        } else {
+            ['1','2','3'].forEach(function(n) {
+                if (!data[n]) return;
+                html += '<div style="display:flex;align-items:flex-start;gap:10px;padding:6px 0;border-bottom:0.5px solid var(--border2)">';
+                html += '<span style="color:var(--accent);font-weight:700;font-size:16px;min-width:18px">' + n + '</span>';
+                html += '<span style="font-size:13px;color:var(--text1);line-height:1.5">' + esc(data[n]) + '</span>';
+                html += '</div>';
+            });
+        }
+        el.innerHTML = html;
+    }
+
     function renderFocusDisplay() {
         var el = document.getElementById('focus_display');
         if (!el) return;
@@ -7546,6 +7647,7 @@
         document.getElementById('focus_edit').style.display = 'none';
         document.getElementById('focus_display').style.display = 'block';
         renderFocusDisplay();
+        renderOverviewFocus(); // keep overview in sync
     }
 
     // ═══════════════════════════════════════
@@ -8155,13 +8257,63 @@
         ls_set('upskill_meta',meta);closePrepMetaModal();renderUpskill();appToast('✅ Prep info saved!');
     }
     function eraseAllPrepCategories(){
-        if(!confirm('Reset categories to defaults? Progress is kept.'))return;
-        ls_set('upskill_plan_data',[]);renderUpskill();appToast('🗑️ Reset to defaults');
+        appConfirm('Reset categories to defaults?', function() {
+            // Load user-saved default if it exists, otherwise wipe (falls back to UPSKILL_PLAN)
+            var savedDefault = null;
+            try { var v = localStorage.getItem('upskill_plan_user_default'); savedDefault = v ? JSON.parse(v) : null; } catch(e){}
+            if (savedDefault && savedDefault.length > 0) {
+                ls_set('upskill_plan_data', savedDefault);
+                appToast('✅ Reset to your saved default');
+            } else {
+                ls_set('upskill_plan_data',[]);
+                appToast('✅ Reset to built-in default');
+            }
+            renderUpskill();
+        }, 'Reset', false);
     }
     function eraseAllPrepData(){
-        if(!confirm('Delete ALL prep data: progress, notes, categories, mocks?'))return;
-        ['upskill_progress','upskill_notes','upskill_mocks','upskill_meta','upskill_custom','upskill_plan_data','upskill_overrides'].forEach(function(k){try{localStorage.removeItem(k);}catch(e){}});
-        schedulePush();renderUpskill();appToast('🗑️ All prep data erased');
+        appConfirm('Delete ALL prep data (progress, notes, categories, mocks)?', function() {
+            ['upskill_progress','upskill_notes','upskill_mocks','upskill_meta','upskill_custom','upskill_plan_data','upskill_overrides'].forEach(function(k){
+                try{ls_set(k,{});}catch(e){}
+            });
+            schedulePush();renderUpskill();appToast('🗑️ All prep data erased');
+        }, '🗑️ Erase All');
+    }
+    function saveCurrentPlanAsDefault() {
+        var plan = getPrepPlanData();
+        if (!plan || plan.length === 0) { appToast('⚠️ No categories to save'); return; }
+        try { localStorage.setItem('upskill_plan_user_default', JSON.stringify(plan)); } catch(e) {}
+        appToast('✅ Current plan saved as your default! "Reset to Default" will restore this.');
+    }
+
+    // Clear gym data from localStorage (called from Health tab danger zone)
+    function clearGymData(which) {
+        var label = which === 'sessions' ? 'all gym sessions' : 'all gym templates';
+        appConfirm('Clear ' + label + '?', function() {
+            var key = which === 'sessions' ? 'gym_sessions' : 'gym_templates';
+            try { localStorage.removeItem(key); } catch(e) {}
+            // Reload iframe if open
+            var iframe = document.getElementById('gym_iframe');
+            if (iframe && document.getElementById('health_gym_body').style.display !== 'none') {
+                iframe.src = iframe.src;
+            }
+            renderHealthGymSummary();
+            appToast('🗑️ ' + label.charAt(0).toUpperCase() + label.slice(1) + ' cleared');
+        }, '🗑️ Clear');
+    }
+    function renderHealthGymSummary() {
+        var el = document.getElementById('health_gym_summary');
+        if (!el) return;
+        try {
+            var sessions = JSON.parse(localStorage.getItem('gym_sessions') || '[]');
+            var templates = JSON.parse(localStorage.getItem('gym_templates') || '[]');
+            var lastDate = sessions.length > 0 ? sessions[0].date : '—';
+            el.innerHTML = '<div style="display:flex;gap:8px;flex-wrap:wrap">'
+                + '<div class="metric" style="flex:1;min-width:80px;padding:8px 12px"><div class="metric-lbl">Sessions</div><div class="metric-val" style="font-size:18px">' + sessions.length + '</div></div>'
+                + '<div class="metric" style="flex:1;min-width:80px;padding:8px 12px"><div class="metric-lbl">Last Session</div><div class="metric-val" style="font-size:14px">' + lastDate + '</div></div>'
+                + '<div class="metric" style="flex:1;min-width:80px;padding:8px 12px"><div class="metric-lbl">Templates</div><div class="metric-val" style="font-size:18px">' + templates.length + '</div></div>'
+                + '</div>';
+        } catch(e) { el.innerHTML = ''; }
     }
     function quickCompleteTask(id){
         var tasks=getTasks();if(!tasks[id])return;
@@ -8331,9 +8483,9 @@
             var pPct   = Math.round(pDone / pTotal * 100);
             var pClr   = pPct === 100 ? 'var(--green)' : pPct >= 50 ? 'var(--yellow)' : 'var(--accent)';
 
-            // Default: collapsed for all phases except the first incomplete one
+            // Default: all phases collapsed — user expands the ones they want to work on
             if (!(phase.id in window._upPhaseCollapsed)) {
-                window._upPhaseCollapsed[phase.id] = (phase.id !== firstIncompleteId);
+                window._upPhaseCollapsed[phase.id] = true;
             }
             var isCollapsed = window._upPhaseCollapsed[phase.id];
             var arrowChar   = isCollapsed ? '▶' : '▼';
@@ -9037,6 +9189,18 @@
     <div style="display:flex;gap:8px;margin-top:14px">
       <button class="btn btn-w" style="flex:1" onclick="ciSkip()">Skip →</button>
       <button class="btn btn-o" style="flex:1" onclick="ciNext()">Done ✓</button>
+    </div>
+  </div>
+</div>
+
+<!-- APP-STYLE CONFIRM DIALOG -->
+<div id="app_confirm_overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.72);z-index:3000;align-items:flex-end;justify-content:center;backdrop-filter:blur(6px)">
+  <div style="background:var(--bg2);border-radius:22px 22px 0 0;padding:22px 18px 38px;width:100%;max-width:480px">
+    <div id="app_confirm_msg" style="font-size:15px;font-weight:600;color:var(--text1);margin-bottom:8px;line-height:1.55"></div>
+    <div id="app_confirm_sub" style="font-size:12px;color:var(--text3);margin-bottom:22px;line-height:1.5"></div>
+    <div style="display:flex;gap:10px">
+      <button class="btn btn-w" style="flex:1" onclick="_appConfirmClose()">Cancel</button>
+      <button id="app_confirm_ok_btn" class="btn btn-r" style="flex:1" onclick="_appConfirmDo()">Confirm</button>
     </div>
   </div>
 </div>
