@@ -1986,7 +1986,8 @@
         if (!FB_CONFIG || !FB_CONFIG.apiKey) { if (!_initDone) { _initDone = true; initDashboard(); } return; }
         if (typeof firebase === 'undefined') { initDashboard(); return; }
         if (_fbReady) { applyAuthRole(); if (_initDone) reRenderAll(); return; }
-        _fbApp = (firebase.apps && firebase.apps.length) ? firebase.app() : firebase.initializeApp(FB_CONFIG);
+        var _existingDefault = firebase.apps && firebase.apps.find(function(a){ return a.name === '[DEFAULT]'; });
+        _fbApp = _existingDefault || firebase.initializeApp(FB_CONFIG);
         _fbDb  = firebase.database();
         _fbRef = _fbDb.ref('dashboard/data');
         _fbAuth = firebase.auth();
@@ -6492,8 +6493,10 @@
             // Auto-grant readonly (in-memory only) — no password prompt for shared users
             _authRole = 'readonly';
             applyAuthRole();
-            try { tmpApp.delete(); } catch(e) {}
-            initFirebase();
+            // Wait for _bootstrap app deletion before initFirebase so firebase.app('[DEFAULT]')
+            // doesn't race with firebase.app() and get the wrong app.
+            var _del; try { _del = tmpApp.delete(); } catch(e) { _del = Promise.resolve(); }
+            _del.then(function(){ initFirebase(); }).catch(function(){ initFirebase(); });
           } else {
             try { tmpApp.delete(); } catch(e) {}
             initSetupWizard();
