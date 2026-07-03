@@ -2114,6 +2114,8 @@
       renderExpenses();
       renderWeight();     // also calls renderWeightChart + updateOverviewMetrics
       renderLimits();
+      renderExpensePattern();
+      renderOwed();
       renderScores();
       renderWeeklyReport();
       renderCustomGrocery();
@@ -2633,6 +2635,18 @@
       var d = document.getElementById('day_date').value;
       if (!d) return;
       var log = getDayTypeLog();
+      var oldType = log[d];
+      // Clear checked activities for the old day type on this date so stale state doesn't persist
+      if (oldType && oldType !== type) {
+        var schedData = ls_get('sched');
+        var oldRows = getDayTypeSchedules()[oldType] || [];
+        var changed = false;
+        oldRows.forEach(function(row, ri) {
+          var k = 'sched_' + oldType + '_' + ri + '_' + d;
+          if (k in schedData) { delete schedData[k]; changed = true; }
+        });
+        if (changed) ls_set('sched', schedData);
+      }
       log[d] = type;
       ls_set('day_type_log', log);
       renderDayTracker(d);
@@ -3337,7 +3351,7 @@
     function renderExpenses() {
       var expenses = getExpenses();
       var today = isoD(new Date());
-      var keys = Object.keys(expenses).sort(function(a,b) {
+      var keys = Object.keys(expenses).filter(function(id){ return expenses[id] && expenses[id].date; }).sort(function(a,b) {
         return expenses[b].date.localeCompare(expenses[a].date);
       });
 
@@ -3512,10 +3526,11 @@
         keys.forEach(function(id) {
             var r = data[id];
             if (r.day !== dayOfMonth) return;
+            if (r.occurrence === 'once') return; // one-time entries are logged immediately on add, not auto-repeated
             var logKey = id + '_' + monthKey;
             if (logged[logKey]) return;
             var expId = 'rec_auto_' + id + '_' + monthKey;
-            expenses[expId] = {id:expId, date:today, desc:r.name, amt:r.amt, type:r.type, vartype:'Fixed', notes:'Auto-logged (recurring)'};
+            expenses[expId] = {id:expId, date:today, desc:r.name, amt:r.amt, type:'Need', vartype:'Fixed', notes:'Auto-logged (recurring)'};
             logged[logKey] = true;
             anyNew = true;
         });
@@ -3922,7 +3937,7 @@
 
     // Consistency score: % of last 7 days where user logged something in any tracker
     function consistencyScore() {
-      // Per-day signals (each worth 1 point, max 6 per day):
+      _consBreakdown = []; // reset before each call — prevents unbounded growth
       //  1. Logged My Day (any sched entry touched)
       //  2. My Day score ≥ 70%
       //  3. Logged nutrition (any nutrition_log entry)
@@ -3960,7 +3975,7 @@
         if (dayExpenses.length > 0) { points++; } // factor 4
         var limits = ls_get('exp_limits');
         var month = d.slice(0, 7);
-        var limit = limits[month] ? parseFloat(limits[month]) : null;
+        var limit = getLimitsForMonth(month).daily || null;
         if (limit) {
           var spent = dayExpenses.reduce(function(sum, id){ return sum + Number(expenses[id].amt||0); }, 0);
           if (spent <= limit) { points++; } // factor 5: under limit
@@ -4137,7 +4152,7 @@
     function renderLimits() {
         // Goals tab — set-once card
         var limits = ls_get('exp_limits');
-        var curMonth = new Date().toISOString().slice(0,7);
+        var curMonth = isoD(new Date()).slice(0,7); // use local date, not UTC
         var statusEl = document.getElementById('goal_limit_status');
         var formEl   = document.getElementById('goal_lim_form');
         var labelEl  = document.getElementById('goal_lim_month_label');
@@ -4243,7 +4258,7 @@
         var el = document.getElementById('exp_pattern_wrap');
         if (!el) return;
         var limits = ls_get('exp_limits');
-        var curMonth = new Date().toISOString().slice(0,7);
+        var curMonth = isoD(new Date()).slice(0,7); // use local date, not UTC
         var d = new Date(curMonth + '-01');
         var monthName = d.toLocaleDateString('en-IN', {month:'long', year:'numeric'});
 
@@ -5201,19 +5216,21 @@
           for (var i = h.goal - 1; i >= 0; i--) {
             var dd = new Date(today); dd.setDate(dd.getDate() - i);
             var ds = isoD(dd);
+            if (h.startDate && ds < h.startDate) continue; // don't show days before habit started
             var v = h.log[ds] || 0;
             if (v===1) { greenCount++; total++; streakHtml += '<div class="habit-day done" title="' + ds + '"></div>'; }
             else if (v===2) { total++; streakHtml += '<div class="habit-day miss" title="' + ds + '"></div>'; }
             else streakHtml += '<div class="habit-day" title="' + ds + '"></div>';
           }
           var pct = total > 0 ? Math.round(greenCount/total*100) : 0;
-          // Calculate current streak
+          // Calculate current streak — start from yesterday if today is not yet logged
           var currentStreak = 0;
-          var checkD = new Date();
-          for (var si = 0; si < 365; si++) {
+          var streakStartOffset = (h.log[isoD(new Date())] === undefined) ? 1 : 0;
+          for (var si = streakStartOffset; si < 365; si++) {
             var checkDate = new Date();
             checkDate.setDate(checkDate.getDate() - si);
             var dss = isoD(checkDate);
+            if (h.startDate && dss < h.startDate) break;
             if (h.log[dss] === 1) currentStreak++;
             else if (h.log[dss] === 2 || h.log[dss] === undefined) break;
           }
@@ -5238,6 +5255,7 @@
           for (var di = 6; di >= 0; di--) {
             var dd2 = new Date(); dd2.setDate(dd2.getDate() - di);
             var ds2 = isoD(dd2);
+            if (h.startDate && ds2 < h.startDate) continue; // don't show days before habit started
             var v2 = h.log[ds2] || 0;
             var dayLabel = dd2.toLocaleDateString('en-IN', {weekday:'short'}).slice(0,2);
             var dayNum = dd2.getDate();
@@ -5307,6 +5325,8 @@
       document.getElementById('sh_item').value = '';
       document.getElementById('sh_budget').value = '';
       document.getElementById('sh_notes').value = '';
+      var forEl = document.getElementById('sh_for'); if (forEl) forEl.value = '';
+      var priEl = document.getElementById('sh_pri'); if (priEl) priEl.selectedIndex = 0;
       renderShopping();
     }
 
@@ -5793,7 +5813,7 @@
         var expData = expenseScoreForDate(d);
         var expPct = expData ? expData.pct : null;
         var expScore = expPct === null ? null : Math.max(0, 100 - expPct);
-        var consPct = null;
+        var consPct = consistencyScore();
         var metrics = [s, expScore, nutPct, consPct].filter(function(v){ return v !== null; });
         var overall = metrics.length > 0 ? Math.round(metrics.reduce(function(a,b){return a+b},0)/metrics.length) : null;
         return {date:d, score:overall};
@@ -5811,7 +5831,7 @@
       var summaryHtml = '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:12px">';
       summaryHtml += '<div class="sum-box"><div class="sv" style="color:var(--accent)">' + (avgScore !== null ? avgScore + '%' : '—') + '</div><div class="sl">Avg score</div></div>';
       summaryHtml += '<div class="sum-box"><div class="sv" style="color:var(--green)">' + streak + 'd</div><div class="sl">Streak ≥70%</div></div>';
-      summaryHtml += '<div class="sum-box"><div class="sv" style="color:var(--teal)" style="font-size:11px">' + (bestDay ? fmtD(new Date(bestDay+'T00:00:00')) : '—') + '</div><div class="sl">Best day</div></div>';
+      summaryHtml += '<div class="sum-box"><div class="sv" style="color:var(--teal);font-size:11px">' + (bestDay ? fmtD(new Date(bestDay+'T00:00:00')) : '—') + '</div><div class="sl">Best day</div></div>';
       summaryHtml += '</div>';
       // Day bars
       var barsHtml = '';
@@ -6314,6 +6334,7 @@
           if (!h || !h.log) return;
           Object.keys(h.log).forEach(function(dateStr) {
             if (!/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) return;
+            if (h.startDate && dateStr < h.startDate) return; // don't auto-miss pre-start days
             var keyMs = new Date(dateStr + 'T00:00:00').getTime();
             if ((h.log[dateStr] || 0) === 0 && (todayMs - keyMs) >= twoDaysMs) {
               h.log[dateStr] = 2;
@@ -6736,6 +6757,7 @@
         ls_set('nutrition_log', log);
         renderNutritionLog();
         renderNutritionSummary();
+        renderCalorieGauge(); // refresh Overview calorie gauge immediately
         renderScores();
         // Clear form
         ['nut_prot_c','nut_carb_c','nut_fat_c','nut_fib_c','nut_cal_c','nut_dish','nut_where','nut_prot_src'].forEach(function(id) {
@@ -6951,17 +6973,18 @@
         if (keys.length > 0) {
             var latest = data[keys[0]];
             var wt = parseFloat(latest.wt);
-            var fatPct = latest.fat ? parseFloat(latest.fat) : null;
-            var fatKg = fatPct ? (wt * fatPct / 100) : null;
-            var lean = fatKg ? (wt - fatKg) : null;
+            var fatPct = (latest.fat !== null && latest.fat !== undefined) ? parseFloat(latest.fat) : null;
+            var fatKg = (fatPct !== null && !isNaN(fatPct)) ? (wt * fatPct / 100) : null;
+            var lean = fatKg !== null ? (wt - fatKg) : null;
             var bmi = height > 0 ? (wt / Math.pow(height/100, 2)) : null;
             var bmiCat = bmi ? (bmi < 18.5 ? 'Underweight' : bmi < 25 ? 'Normal ✅' : bmi < 30 ? 'Overweight' : 'Obese') : '';
 
             // Previous entry for delta
             var prev = keys.length > 1 ? data[keys[1]] : null;
             var delta = prev ? (wt - parseFloat(prev.wt)).toFixed(1) : null;
-            var deltaStr = delta ? (parseFloat(delta) > 0 ? '+' + delta + 'kg ▲' : delta + 'kg ▼') : '—';
-            var deltaColor = delta ? (parseFloat(delta) > 0 ? 'var(--red)' : 'var(--green)') : 'var(--text3)';
+            var _dv = delta !== null ? parseFloat(delta) : null;
+            var deltaStr = _dv === null ? '—' : _dv > 0 ? '+' + delta + 'kg ▲' : _dv < 0 ? delta + 'kg ▼' : delta + 'kg →';
+            var deltaColor = _dv === null ? 'var(--text3)' : _dv > 0 ? 'var(--red)' : _dv < 0 ? 'var(--green)' : 'var(--text3)';
 
             function set(id, val) { var el=document.getElementById(id); if(el) el.textContent=val; }
             // Overview strip
@@ -7258,7 +7281,7 @@
         var el = document.getElementById('focus_display');
         if (!el) return;
         var focus = getFocus();
-        var curMonth = new Date().toISOString().slice(0,7);
+        var curMonth = isoD(new Date()).slice(0,7); // use local date, not UTC
         var data = focus[curMonth] || {};
         var html = '';
         if (!data['1'] && !data['2'] && !data['3']) {
@@ -7276,7 +7299,7 @@
     }
 
     function saveFocus() {
-        var curMonth = new Date().toISOString().slice(0,7);
+        var curMonth = isoD(new Date()).slice(0,7); // use local date, not UTC
         var focus = getFocus();
         focus[curMonth] = {
             '1': document.getElementById('focus_1').value.trim(),
@@ -7296,7 +7319,7 @@
     function renderMonthlyReview() {
         var el = document.getElementById('monthly_review_wrap');
         if (!el) return;
-        var curMonth = new Date().toISOString().slice(0,7);
+        var curMonth = isoD(new Date()).slice(0,7); // use local date, not UTC
         var d1 = curMonth + '-01';
         var lastDay = new Date(parseInt(curMonth.slice(0,4)), parseInt(curMonth.slice(5,7)), 0).getDate();
         var d2 = curMonth + '-' + String(lastDay).padStart(2,'0');
@@ -7892,13 +7915,18 @@
     }
     function quickCompleteTask(id){
         var tasks=getTasks();if(!tasks[id])return;
-        var done=ls_get('tasks_done_list');tasks[id].status='done';tasks[id].completedDate=getTodayISO();
+        var done=ls_get('tasks_done_list');
+        tasks[id].status='done';
+        tasks[id].completedDate=getTodayISO();
+        tasks[id].completedOn=getTodayISO(); // match field read by renderTasks done-table
         done[id]=tasks[id];delete tasks[id];
         ls_set('tasks_active_list',tasks);ls_set('tasks_done_list',done);appToast('✅ Task completed!');
     }
     function quickCycleTaskStatus(id){
         var tasks=getTasks();if(!tasks[id])return;
-        var cycle=['todo','inprogress','blocked'];var cur=tasks[id].status||'todo';
+        var cycle=['Todo','In Progress','Blocked'];var cur=tasks[id].status||'Todo';
+        // Normalize lowercase statuses written by older code
+        if(cur==='todo')cur='Todo';else if(cur==='inprogress')cur='In Progress';else if(cur==='blocked')cur='Blocked';
         tasks[id].status=cycle[(cycle.indexOf(cur)+1)%cycle.length];
         ls_set('tasks_active_list',tasks);
     }
