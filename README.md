@@ -1,17 +1,17 @@
 # My Dashboard — Personal Life Dashboard
 
-A single-file web app that acts as your personal command center — tracking your day, health, money, goals, and learning in one place. It runs entirely in your browser, syncs across devices via Firebase, and can be installed on your phone like a native app.
+A single-file web app that acts as your personal command center — tracking your day, health, money, goals, fitness, and learning in one place. It runs entirely in your browser, syncs across devices via Firebase, and can be installed on your phone like a native app.
 
 ## What you get
 
-- **Overview tab** — a summary of everything at a glance, so you always know where things stand
-- **Today tab** — a daily view of your tasks and events for the current day
-- **Health tab** — log fitness, symptoms, medications, or any wellness data you want to track
+- **Overview tab** — score of the day, monthly intentions, what's left today, and calorie gauge at a glance
+- **Today tab** — daily schedule, tasks, and habit tracker
+- **Health tab** — Body metrics (weight, BMI, body fat), Food/Nutrition logging, and **Gym Tracker** (exercises, sets, progressive overload, rest timer, 1RM, templates)
 - **Expenses tab** — record spending and track your budget with your local currency
 - **Prep tab** — plan and track your upskilling, study goals, and career readiness
-- **Goals tab** — set personal and professional goals and track your progress over time
-- **Offline-ready PWA** — install it on your phone home screen and it works even without internet
-- **Sharing** — share a read-only link with a partner or family member; they see everything but cannot edit
+- **Goals tab** — body targets, nutrition targets, expense limits, score weights
+- **Offline-ready PWA** — install on your phone home screen, works without internet; changes sync both ways when back online
+- **Sharing** — share a read-only link; recipient connects to your Firebase automatically
 
 ## What you need
 
@@ -83,6 +83,7 @@ Firebase is a free service from Google that stores your data in the cloud so it 
 10. Click **Create database**.
 11. Choose the server location closest to you. Click **Next**.
 12. Select **Start in test mode**. Click **Enable**.
+13. **Enable Anonymous Authentication** (required for sync to work): In the left sidebar click **Authentication** → **Sign-in method** → **Anonymous** → toggle **Enable** → **Save**. This allows the app to authenticate automatically so writes are permitted.
 
 > **Note on security:** Test mode allows open read/write access for 30 days. For personal use this is fine to start. After the 30 days expire, go to Realtime Database → Rules and renew access (see Troubleshooting below).
 
