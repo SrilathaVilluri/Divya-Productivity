@@ -1,13 +1,12 @@
 const CACHE = 'dashboard-v3';
 const ASSETS = [
   '/Dashboard/',
-  '/Dashboard/index.html',
-  '/Dashboard/#fb=eyJhcGlLZXkiOiJBSXphU3lDaDFwMmgtMUdrbzYzZzZyUllpT2JZdE9LLXM2OWE1UkkiLCJhdXRoRG9tYWluIjoibm8tbmVnb3RpYXRpb24uZmlyZWJhc2VhcHAuY29tIiwiZGF0YWJhc2VVUkwiOiJodHRwczovL25vLW5lZ290aWF0aW9uLWRlZmF1bHQtcnRkYi5hc2lhLXNvdXRoZWFzdDEuZmlyZWJhc2VkYXRhYmFzZS5hcHAiLCJwcm9qZWN0SWQiOiJuby1uZWdvdGlhdGlvbiIsInN0b3JhZ2VCdWNrZXQiOiJuby1uZWdvdGlhdGlvbi5maXJlYmFzZXN0b3JhZ2UuYXBwIiwibWVzc2FnaW5nU2VuZGVySWQiOiIxMDc2NjY3NDY2ODg4IiwiYXBwSWQiOiIxOjEwNzY2Njc0NjY4ODg6d2ViOjkyNzdiYTU0OGQ4ZWU5YmEwN2NiM2QifQ%3D%3D'
+  '/Dashboard/index.html'
 ];
 
 self.addEventListener('install', function(e) {
   e.waitUntil(
-    caches.open(CACHE).then(function(c) { return c.addAll(['/Dashboard/', '/Dashboard/index.html']); })
+    caches.open(CACHE).then(function(c) { return c.addAll(ASSETS); })
   );
   self.skipWaiting();
 });
@@ -23,7 +22,7 @@ self.addEventListener('activate', function(e) {
 
 self.addEventListener('fetch', function(e) {
   // Network-first for HTML so deployments are always picked up immediately
-  if (e.request.mode === 'navigate' || e.request.url.endsWith('index.html') || e.request.url.endsWith('/Dashboard/') || e.request.url.indexOf('/Dashboard/#') !== -1) {
+  if (e.request.mode === 'navigate' || e.request.url.endsWith('index.html') || e.request.url.endsWith('/Dashboard/')) {
     e.respondWith(
       fetch(e.request).then(function(res) {
         var clone = res.clone();
