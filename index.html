@@ -1695,7 +1695,11 @@
     <div class="form-group" style="margin-bottom:8px"><label>Title</label><input class="fi" id="pm_title" placeholder="e.g. Job Switch Prep"></div>
     <div class="form-group" style="margin-bottom:8px"><label>Subtitle</label><input class="fi" id="pm_subtitle" placeholder="e.g. Java Dev to Product Company"></div>
     <div class="form-group" style="margin-bottom:8px"><label>Target Salary</label><input class="fi" id="pm_salary" placeholder="e.g. 25+ LPA"></div>
-    <div class="form-group" style="margin-bottom:12px"><label>Start Date</label><input type="date" class="fi" id="pm_start"></div>
+    <div class="form-group" style="margin-bottom:8px"><label>Start Date</label><input type="date" class="fi" id="pm_start"></div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px">
+      <div class="form-group" style="margin:0"><label>Total Days (plan duration)</label><input type="number" class="fi" id="pm_total_days" placeholder="e.g. 50" min="1"></div>
+      <div class="form-group" style="margin:0"><label>Daily Hours</label><input type="number" class="fi" id="pm_daily_hrs" placeholder="e.g. 3" min="0.5" step="0.5"></div>
+    </div>
     <div style="display:flex;gap:8px"><button class="btn btn-o" style="flex:1" onclick="savePrepMeta()">Save</button><button class="btn btn-w" style="flex:1" onclick="closePrepMetaModal()">Cancel</button></div>
   </div>
 </div>
@@ -2442,9 +2446,10 @@
         // ── SECTION C: Prep pace ─────────────────────────────────────
         var meta = ls_get('upskill_meta');
         if (meta && meta.start) {
+            var _PLAN_DAYS = getTotalPrepDays();
             var sd = new Date(meta.start + 'T00:00:00');
             var nowD = new Date(); nowD.setHours(0,0,0,0);
-            var dayNum = Math.min(50, Math.max(1, Math.floor((nowD - sd) / 86400000) + 1));
+            var dayNum = Math.min(_PLAN_DAYS, Math.max(1, Math.floor((nowD - sd) / 86400000) + 1));
             var prog = ls_get('upskill_progress');
             var custom = ls_get('upskill_custom');
             var allT = [], doneT = 0;
@@ -2453,14 +2458,14 @@
                 if (custom[ph.id]) allT = allT.concat(custom[ph.id]);
             });
             allT.forEach(function(t) { if (prog[t.id]) doneT++; });
-            var expectedPct = Math.round(dayNum / 50 * 100);
+            var expectedPct = Math.round(dayNum / _PLAN_DAYS * 100);
             var actualPct = allT.length > 0 ? Math.round(doneT / allT.length * 100) : 0;
             if (actualPct < expectedPct - 5) {
                 var behind = Math.ceil((expectedPct - actualPct) / 100 * allT.length);
                 html += '<div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.6px;margin:12px 0 6px">Prep Alert</div>';
                 html += '<div onclick="showTab(\'upskill\')" style="display:flex;align-items:center;gap:8px;padding:8px 0;cursor:pointer">';
                 html += '<span style="font-size:16px">⚠️</span>';
-                html += '<span style="font-size:13px;color:var(--text1);flex:1">Day ' + dayNum + '/50 · ' + behind + ' topics behind pace</span>';
+                html += '<span style="font-size:13px;color:var(--text1);flex:1">Day ' + dayNum + '/' + _PLAN_DAYS + ' · ' + behind + ' topics behind pace</span>';
                 html += '<span style="font-size:11px;color:var(--text3)">→</span>';
                 html += '</div>';
             }
@@ -8071,6 +8076,13 @@
     }
     function savePrepPlanData(d){ls_set('upskill_plan_data',d);}
     function getTotalPrepDays(){
+        // Returns the user-configured plan duration in calendar days (default 50).
+        // This is separate from getTopicDaysTotal() which sums curriculum topic-days.
+        var meta = ls_get('upskill_meta');
+        return parseInt(meta.totalDays) || 50;
+    }
+    function getTopicDaysTotal(){
+        // Sum of all topic `days` fields — the full curriculum size in study-days.
         var plan=getPrepPlanData(),custom=ls_get('upskill_custom'),ov=ls_get('upskill_overrides')||{},tot=0;
         plan.forEach(function(ph){
             (ph.topics||[]).forEach(function(tp){var o=ov[tp.id];tot+=Number((o&&o.days!=null)?o.days:(tp.days||1));});
@@ -8122,6 +8134,8 @@
         document.getElementById('pm_subtitle').value=meta.subtitle||'';
         document.getElementById('pm_salary').value=meta.salary||'';
         document.getElementById('pm_start').value=meta.start||'';
+        document.getElementById('pm_total_days').value=meta.totalDays||'';
+        document.getElementById('pm_daily_hrs').value=meta.dailyHrs||'';
         m.style.display='flex';
     }
     function closePrepMetaModal(){var m=document.getElementById('prep_meta_modal');if(m)m.style.display='none';}
@@ -8130,9 +8144,14 @@
         var subtitle=document.getElementById('pm_subtitle').value.trim();
         var salary=document.getElementById('pm_salary').value.trim();
         var start=document.getElementById('pm_start').value.trim();
+        var totalDays=parseInt(document.getElementById('pm_total_days').value)||0;
+        var dailyHrs=parseFloat(document.getElementById('pm_daily_hrs').value)||0;
         if(start&&!start.match(/^\d{4}-\d{2}-\d{2}$/)){appToast('⚠️ Start date: YYYY-MM-DD');return;}
+        if(totalDays<1&&document.getElementById('pm_total_days').value){appToast('⚠️ Total days must be ≥ 1');return;}
         var meta=ls_get('upskill_meta');
         if(title)meta.title=title;if(subtitle)meta.subtitle=subtitle;if(salary)meta.salary=salary;if(start)meta.start=start;
+        if(totalDays>0)meta.totalDays=totalDays;
+        if(dailyHrs>0)meta.dailyHrs=dailyHrs;
         ls_set('upskill_meta',meta);closePrepMetaModal();renderUpskill();appToast('✅ Prep info saved!');
     }
     function eraseAllPrepCategories(){
@@ -8202,27 +8221,28 @@
         var pct = total > 0 ? Math.round(done / total * 100) : 0;
 
         // Days calc
+        var PLAN_DAYS    = getTotalPrepDays(); // user-configured plan duration (e.g. 50)
         var daysLeftEl   = document.getElementById('up_days_left');
         var startLbl     = document.getElementById('up_start_label');
         if (meta.start) {
             var sd  = new Date(meta.start + 'T00:00:00');
-            var ed  = new Date(sd.getTime() + 49 * 86400000);
+            var ed  = new Date(sd.getTime() + (PLAN_DAYS - 1) * 86400000);
             var now = new Date(); now.setHours(0,0,0,0);
             var dl  = Math.max(0, Math.ceil((ed - now) / 86400000));
-            var dn  = Math.min(50, Math.ceil((now - sd) / 86400000));
+            var dn  = Math.min(PLAN_DAYS, Math.max(1, Math.ceil((now - sd) / 86400000) + 1));
             if (daysLeftEl) daysLeftEl.textContent = dl;
-            if (startLbl)   startLbl.textContent = meta.start + '  (Day ' + Math.max(1,dn) + ' of 50)';
+            if (startLbl)   startLbl.textContent = meta.start + '  (Day ' + dn + ' of ' + PLAN_DAYS + ')';
         } else {
-            if (daysLeftEl) daysLeftEl.textContent = '50';
+            if (daysLeftEl) daysLeftEl.textContent = PLAN_DAYS;
             if (startLbl)   startLbl.textContent = 'Not set';
         }
 
-        var _tDays=getTotalPrepDays(),_rDays=getRemainingPrepDays();
+        var _tDays=PLAN_DAYS, _rDays=getRemainingPrepDays();
         var _tdEl=document.getElementById('up_total_days'),_efEl=document.getElementById('up_est_finish'),_afEl=document.getElementById('up_act_finish');
         if(_tdEl)_tdEl.textContent=_tDays+'d';
         if(meta.start){
             var _sd=new Date(meta.start+'T00:00:00');
-            var _ee=new Date(_sd.getTime()+_tDays*86400000);
+            var _ee=new Date(_sd.getTime()+(_tDays-1)*86400000);
             var _nowiso=getTodayISO();
             var _nd=new Date(_nowiso+'T00:00:00');
             var _ae=new Date(_nd.getTime()+_rDays*86400000);
