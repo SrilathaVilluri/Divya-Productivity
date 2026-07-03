@@ -573,14 +573,14 @@
 .session-card:active,.session-card.open{border-color:var(--accent)}
 .session-date{font-size:13px;font-weight:700;color:var(--text1)}
 .session-meta{font-size:11px;color:var(--text3);margin-top:3px}
-.session-
-.session-card.open .session-
+.session-body{display:none;margin-top:12px;padding-top:12px;border-top:.5px solid var(--border)}
+.session-card.open .session-body{display:block}
 .ex-hist{margin-bottom:10px}
 .ex-hist-name{font-size:13px;font-weight:700;color:var(--text1);margin-bottom:4px}
 .set-pill{display:inline-block;background:var(--bg4);border:.5px solid var(--border);
   border-radius:8px;padding:3px 9px;font-size:11px;color:var(--text2);margin:2px}
 .set-pill.pr{background:rgba(255,159,10,.15);color:var(--yellow);border-color:rgba(255,159,10,.3)}
-.set-pill
+.set-pill.cardio{background:rgba(90,200,250,.1);color:var(--teal);border-color:rgba(90,200,250,.25)}
 
 .prog-ex-row{display:flex;align-items:center;justify-content:space-between;
   padding:10px 0;border-bottom:.5px solid var(--border)}
@@ -605,6 +605,24 @@
 
 .chart-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch;margin-top:6px}
 .chart-wrap svg{display:block;min-width:280px}
+
+/* ── CONFLICT / REST PICKER OVERLAYS ── */
+.conflict-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.72);
+  z-index:2500;align-items:flex-end;justify-content:center;backdrop-filter:blur(6px)}
+.conflict-overlay.open{display:flex}
+.conflict-sheet{background:var(--bg2);border-radius:22px 22px 0 0;
+  padding:22px 18px 40px;width:100%;max-width:480px;max-height:85vh;overflow-y:auto}
+.conflict-title{font-size:16px;font-weight:800;color:var(--text1);margin-bottom:4px}
+.conflict-sub{font-size:12px;color:var(--text3);margin-bottom:20px;line-height:1.6}
+.conflict-option{width:100%;background:var(--bg3);border:.5px solid var(--border);
+  color:var(--text1);border-radius:14px;padding:14px 16px;margin-bottom:10px;
+  cursor:pointer;font-family:inherit;text-align:left;transition:all .15s}
+.conflict-option:active,.conflict-option.sel{border-color:var(--accent);background:rgba(255,107,0,.08)}
+.conflict-option-title{font-size:14px;font-weight:700;color:var(--text1)}
+.conflict-option-desc{font-size:11px;color:var(--text3);margin-top:3px;line-height:1.5}
+.conflict-cancel{width:100%;background:none;border:.5px solid var(--border);
+  border-radius:10px;padding:11px;font-size:13px;font-weight:600;color:var(--text3);
+  cursor:pointer;font-family:inherit;margin-top:4px}
 
 }
 </style>
@@ -3334,18 +3352,20 @@
       var defs = getDayTypeDefs();
       if (!defs[key]) return;
       var label = defs[key].label || key;
-      /* skip - handled by appConfirm pattern */ if(!window.confirm('Delete day type "'+label+'"?'))return;
-      delete defs[key];
-      saveDayTypeDefs(defs);
-      var remaining = Object.keys(defs);
-      if (_selectedDayTypeEdit === key) {
-        _selectedDayTypeEdit = remaining.length > 0 ? remaining[0] : null;
-      }
-      renderDayTypeManagerList();
-      renderDayTypeButtons();
-      renderDayTypeEditButtons();
-      renderDayTypeEditList();
-      buildSched();
+      appConfirm('Delete day type "' + label + '"? This removes its schedule template but does NOT erase past log entries.', function() {
+        defs = getDayTypeDefs(); // re-read in case changed
+        delete defs[key];
+        saveDayTypeDefs(defs);
+        var remaining = Object.keys(defs);
+        if (_selectedDayTypeEdit === key) {
+          _selectedDayTypeEdit = remaining.length > 0 ? remaining[0] : null;
+        }
+        renderDayTypeManagerList();
+        renderDayTypeButtons();
+        renderDayTypeEditButtons();
+        renderDayTypeEditList();
+        buildSched();
+      }, '🗑️ Delete Day Type');
     }
 
     // ──────────────────────────────────────────────────────────────────────────
@@ -9504,10 +9524,10 @@ function fmtSetsShort(ex){
 
 // ─── TAB SWITCHING ────────────────────────────────────────────────────────────
 function showGymTab(name){
-  document.querySelectorAll('.sec').forEach(function(s){s.classList.remove('show');});
-  document.querySelectorAll('.tab').forEach(function(t){t.classList.remove('active');});
-  var s=document.getElementById('sec_'+name);
-  var t=document.getElementById('tab_'+name);
+  document.querySelectorAll('.gym-sec').forEach(function(s){s.classList.remove('show');});
+  document.querySelectorAll('.gym-tab').forEach(function(t){t.classList.remove('active');});
+  var s=document.getElementById('gym_sec_'+name);
+  var t=document.getElementById('gym_tab_'+name);
   if(s)s.classList.add('show');
   if(t)t.classList.add('active');
   if(name==='history'){renderGymHistory();}
@@ -9674,7 +9694,29 @@ function renderGymCardioBlock(ex,ei){
   return html;
 }
 
-function addGymStrengthSet(ei){} // overridden below
+function addGymStrengthSet(ei) {
+  // Reads from IDs rendered by renderGymStrengthBlock: w_{ei}, r_{ei}, rpe_{ei}
+  var w   = (document.getElementById('w_' + ei) || {}).value || '';
+  var r   = (document.getElementById('r_' + ei) || {}).value || '';
+  var rpe = parseInt((document.getElementById('rpe_' + ei) || {}).value) || 0;
+  if (!w && !r) { appToast('⚠️ Enter weight and reps'); return; }
+  var set = { weight: parseFloat(w) || 0, reps: parseInt(r) || 0 };
+  if (rpe >= 1 && rpe <= 10) set.rpe = rpe;
+  _gymEx[ei].sets.push(set);
+  var wEl = document.getElementById('w_' + ei);
+  var rEl = document.getElementById('r_' + ei);
+  var rpeEl = document.getElementById('rpe_' + ei);
+  if (wEl) wEl.value = '';
+  if (rEl) rEl.value = '';
+  if (rpeEl) rpeEl.value = '';
+  renderGymExercises();
+  if (!_restActive) {
+    setTimeout(function() {
+      var picker = document.getElementById('rest_picker_overlay');
+      if (picker) picker.classList.add('open');
+    }, 150);
+  }
+}
 function addGymCardioSet(ei){
   var dur=parseFloat(document.getElementById('gym_cd_dur_'+ei).value)||0;
   var dist=parseFloat(document.getElementById('gym_cd_dist_'+ei).value)||0;
@@ -9904,7 +9946,7 @@ function renderGymHistory(){
     });
     if(sess.notes)html+='<div style="font-size:12px;color:var(--text2);margin-top:8px;padding:8px;background:var(--bg3);border-radius:8px">📝 '+esc(sess.notes)+'</div>';
     html+='<div style="display:flex;gap:8px;margin-top:10px">';
-    html+='<button class="btn btn-r btn-sm" onclick="event.stopPropagation();deleteSession(\''+esc(sess.id)+'\')">🗑️ Delete</button>';
+    html+='<button class="btn btn-r btn-sm" onclick="event.stopPropagation();deleteGymSession(\''+esc(sess.id)+'\')">🗑️ Delete</button>';
     html+='</div>';
     html+='</div></div>';
   });
@@ -10407,25 +10449,8 @@ function renderGymStrengthBlock(ex, ei) {
 }
 
 // Override addStrengthSet to capture RPE and show rest picker
-function addStrengthSet(ei) {
-  var w   = document.getElementById('gym_w_' + ei).value;
-  var r   = document.getElementById('gym_r_' + ei).value;
-  var rpe = parseInt(document.getElementById('gym_rpe_' + ei).value) || 0;
-  if (!w && !r) { appToast('⚠️ Enter weight and reps'); return; }
-  var set = { weight: parseFloat(w) || 0, reps: parseInt(r) || 0 };
-  if (rpe >= 1 && rpe <= 10) set.rpe = rpe;
-  _gymEx[ei].sets.push(set);
-  document.getElementById('gym_w_' + ei).value   = '';
-  document.getElementById('gym_r_' + ei).value   = '';
-  document.getElementById('gym_rpe_' + ei).value = '';
-  renderGymExercises();
-  // Auto-prompt rest timer (unless one is already running)
-  if (!_restActive) {
-    setTimeout(function() {
-      document.getElementById('rest_picker_overlay').classList.add('open');
-    }, 150);
-  }
-}
+// addStrengthSet — alias kept for any legacy calls; real logic is in addGymStrengthSet
+function addStrengthSet(ei) { addGymStrengthSet(ei); }
 
 // ═══════════════════════════════════════════════════════════════════
 // REST TIMER
