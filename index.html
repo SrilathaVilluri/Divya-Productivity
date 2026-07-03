@@ -2620,6 +2620,9 @@
     }
 
     function showTab(name, _fromHistory) {
+        // Close all gym overlays when navigating away — they are position:fixed and show on all tabs
+        _closeAllGymOverlays();
+
         // Remap merged tabs
         if (name === 'schedule' || name === 'tasks' || name === 'habits') name = 'today';
         if (name === 'things' || name === 'sparks') name = 'notes';
@@ -10129,16 +10132,113 @@ function renderGymProgressAll(){
 }
 
 // ─── INIT ─────────────────────────────────────────────────────────────────────
+// Close all gym fixed overlays — called by showTab() so they never bleed onto other tabs
+function _closeAllGymOverlays() {
+  ['gym_conflict_overlay', 'rest_picker_overlay'].forEach(function(id) {
+    var el = document.getElementById(id);
+    if (el) el.classList.remove('open');
+  });
+  // Suppress rest bar visual when leaving health tab (timer keeps running in background)
+  var bar = document.getElementById('rest_bar');
+  if (bar) bar.style.display = 'none';
+}
+
+var _gymInitialized = false; // prevent re-init on every open
 function initGymTracker(){
   var gd = document.getElementById('gym_log_date');
   if(gd && !gd.value) gd.value=new Date().toISOString().slice(0,10);
-  updateGymSuggestions();
-  refreshGymExSelector();
-  renderGymTemplates();
+  if (!_gymInitialized) {
+    updateGymSuggestions();
+    refreshGymExSelector();
+    renderGymTemplates();
+    _gymInitialized = true;
+  }
+  // Re-show rest bar if a timer was running when user left the health tab
+  if (_restActive) {
+    var bar = document.getElementById('rest_bar');
+    if (bar) bar.style.display = 'flex';
+  }
+  // Do NOT call requestNotifPermission() here — it triggers a browser dialog
+  // It is called lazily in startRest() when the user actually uses the rest timer
+}
+
+// ─── REST TIMER ────────────────────────────────────────────────────────────────
+var _restEndsAt = 0;
+var _restActive = false;
+var _restTick   = null;
+
+function startRest(seconds) {
+  var picker = document.getElementById('rest_picker_overlay');
+  if (picker) picker.classList.remove('open');
+  _restEndsAt = Date['now']() + seconds * 1000;
+  _restActive = true;
+  var bar = document.getElementById('rest_bar');
+  if (bar) bar.style.display = 'flex';
+  if (_restTick) clearInterval(_restTick);
+  _restTick = setInterval(tickRest, 500);
+  tickRest();
+  // Request notification permission lazily (only when rest timer is first used)
   requestNotifPermission();
 }
 
-// ─── 1RM / RPE HELPERS (Epley formula) ───────────────────────────────────────
+function tickRest() {
+  var remaining = Math.max(0, Math.ceil((_restEndsAt - Date['now']()) / 1000));
+  var mins = Math.floor(remaining / 60);
+  var secs = remaining % 60;
+  var el = document.getElementById('rest_countdown');
+  if (el) el.textContent = mins + ':' + (secs < 10 ? '0' : '') + secs;
+  if (remaining <= 0) restDone();
+}
+
+function restDone() {
+  clearInterval(_restTick); _restActive = false;
+  var bar = document.getElementById('rest_bar');
+  if (bar) bar.style.display = 'none';
+  playBeep();
+  if (navigator.vibrate) navigator.vibrate([300, 150, 300, 150, 600]);
+  if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
+    try { new Notification('💪 Rest done! Time for the next set.', { silent: true }); } catch(e) {}
+  }
+  appToast('✅ Rest done! Next set.');
+}
+
+function stopRest() {
+  clearInterval(_restTick); _restActive = false;
+  var bar = document.getElementById('rest_bar');
+  if (bar) bar.style.display = 'none';
+}
+
+function adjustRest(seconds) {
+  if (!_restActive) return;
+  _restEndsAt += seconds * 1000;
+  tickRest();
+}
+
+function playBeep() {
+  try {
+    var ctx = new (window.AudioContext || window.webkitAudioContext)();
+    function beep(freq, t, dur) {
+      var o = ctx.createOscillator(), g = ctx.createGain();
+      o.connect(g); g.connect(ctx.destination);
+      o.frequency.value = freq; o.type = 'sine';
+      g.gain.setValueAtTime(0, t);
+      g.gain.linearRampToValueAtTime(0.5, t + 0.03);
+      g.gain.linearRampToValueAtTime(0, t + dur);
+      o.start(t); o.stop(t + dur + 0.05);
+    }
+    beep(880, ctx.currentTime, 0.18);
+    beep(880, ctx.currentTime + 0.25, 0.18);
+    beep(1100, ctx.currentTime + 0.5, 0.35);
+  } catch(e) {}
+}
+
+function requestNotifPermission() {
+  if (typeof Notification !== 'undefined' && Notification.permission === 'default') {
+    Notification.requestPermission().catch(function(){});
+  }
+}
+
+// ─── 1RM / RPE HELPERS ────────────────────────────────────────────────────────
 function calc1RM(weight, reps) {
   if (!weight || !reps || reps <= 0 || reps > 12) return null;
   return Math.round(weight * (1 + reps / 30) * 10) / 10;
@@ -10375,7 +10475,7 @@ function addStrengthSet(ei) {
 </div>
 
 <!-- APP-STYLE CONFIRM DIALOG -->
-<div id="app_confirm_overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.72);z-index:3000;align-items:flex-end;justify-content:center;backdrop-filter:blur(6px)">
+<div id="app_confirm_overlay" onclick="if(event.target===this)_appConfirmClose()" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.72);z-index:3000;align-items:flex-end;justify-content:center;backdrop-filter:blur(6px)">
   <div style="background:var(--bg2);border-radius:22px 22px 0 0;padding:22px 18px 38px;width:100%;max-width:480px">
     <div id="app_confirm_msg" style="font-size:15px;font-weight:600;color:var(--text1);margin-bottom:8px;line-height:1.55"></div>
     <div id="app_confirm_sub" style="font-size:12px;color:var(--text3);margin-bottom:22px;line-height:1.5"></div>
@@ -10387,8 +10487,47 @@ function addStrengthSet(ei) {
 </div>
 
 
+<!-- REST TIMER BAR (fixed bottom — shows during gym rest between sets) -->
+<div id="rest_bar" style="position:fixed;bottom:0;left:0;right:0;z-index:600;background:var(--bg2);border-top:.5px solid rgba(255,107,0,.4);padding:12px 16px max(12px,env(safe-area-inset-bottom));display:none;align-items:center;gap:12px">
+  <div style="flex:1">
+    <div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;font-weight:700;margin-bottom:2px">⏱️ Rest Timer</div>
+    <div id="rest_countdown" style="font-size:26px;font-weight:800;color:var(--accent);min-width:54px;font-variant-numeric:tabular-nums">1:30</div>
+  </div>
+  <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+    <button style="background:var(--bg3);border:.5px solid var(--border);color:var(--text2);border-radius:8px;padding:5px 10px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit" onclick="adjustRest(30)">+30s</button>
+    <button class="btn btn-w btn-sm" onclick="stopRest()">✕ Stop</button>
+  </div>
+</div>
+
+<!-- REST DURATION PICKER SHEET -->
+<div class="conflict-overlay" id="rest_picker_overlay" onclick="if(event.target===this)this.classList.remove('open')">
+  <div class="conflict-sheet" style="padding-bottom:30px">
+    <div class="conflict-title">⏱️ Start Rest Timer</div>
+    <div class="conflict-sub">How long do you need to recover?</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px">
+      <button class="conflict-option" style="padding:16px;text-align:center" onclick="startRest(60)">
+        <div style="font-size:22px;font-weight:800;color:var(--accent)">1:00</div>
+        <div style="font-size:11px;color:var(--text3);margin-top:4px">Light / isolation</div>
+      </button>
+      <button class="conflict-option" style="padding:16px;text-align:center" onclick="startRest(90)">
+        <div style="font-size:22px;font-weight:800;color:var(--accent)">1:30</div>
+        <div style="font-size:11px;color:var(--text3);margin-top:4px">Moderate</div>
+      </button>
+      <button class="conflict-option" style="padding:16px;text-align:center" onclick="startRest(120)">
+        <div style="font-size:22px;font-weight:800;color:var(--accent)">2:00</div>
+        <div style="font-size:11px;color:var(--text3);margin-top:4px">Compound lifts</div>
+      </button>
+      <button class="conflict-option" style="padding:16px;text-align:center" onclick="startRest(180)">
+        <div style="font-size:22px;font-weight:800;color:var(--accent)">3:00</div>
+        <div style="font-size:11px;color:var(--text3);margin-top:4px">Heavy / strength</div>
+      </button>
+    </div>
+    <button class="conflict-cancel" onclick="document.getElementById('rest_picker_overlay').classList.remove('open')">Skip</button>
+  </div>
+</div>
+
 <!-- GYM SESSION CONFLICT SHEET -->
-<div class="conflict-overlay" id="gym_conflict_overlay">
+<div class="conflict-overlay" id="gym_conflict_overlay" onclick="if(event.target===this)resolveGymConflict('cancel')">
   <div class="conflict-sheet">
     <div class="conflict-title">⚠️ Gym session already exists</div>
     <div class="conflict-sub" id="gym_conflict_sub">You already logged a session on this date.</div>
