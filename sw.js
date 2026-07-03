@@ -1,8 +1,7 @@
-const CACHE = 'dashboard-v3';
-const ASSETS = [
-  '/Dashboard/',
-  '/Dashboard/index.html'
-];
+const CACHE = 'dashboard-v4';
+// Derive base path dynamically so this SW works at any deployment path (not just /Dashboard/)
+const BASE = new URL('./', self.location.href).pathname;
+const ASSETS = [BASE, BASE + 'index.html'];
 
 self.addEventListener('install', function(e) {
   e.waitUntil(
@@ -21,15 +20,17 @@ self.addEventListener('activate', function(e) {
 });
 
 self.addEventListener('fetch', function(e) {
+  var url = e.request.url;
   // Network-first for HTML so deployments are always picked up immediately
-  if (e.request.mode === 'navigate' || e.request.url.endsWith('index.html') || e.request.url.endsWith('/Dashboard/')) {
+  var isNav = e.request.mode === 'navigate' || url.endsWith('index.html') || url.endsWith(BASE) || url.endsWith(BASE.replace(/\/$/, ''));
+  if (isNav) {
     e.respondWith(
       fetch(e.request).then(function(res) {
         var clone = res.clone();
         caches.open(CACHE).then(function(c) { c.put(e.request, clone); });
         return res;
       }).catch(function() {
-        return caches.match(e.request) || caches.match('/Dashboard/index.html');
+        return caches.match(e.request) || caches.match(BASE + 'index.html');
       })
     );
     return;
@@ -39,18 +40,15 @@ self.addEventListener('fetch', function(e) {
   );
 });
 
-// FIX 4: Handle SET_START_URL message from the app so the SW caches the correct
-// hash URL after a fresh Firebase setup (e.g. after finishSetup() runs and
-// _updateShareableHash() writes the #fb= fragment into location.hash).
 self.addEventListener('message', function(e) {
-  if (e.data && e.data.type === 'SET_START_URL' && e.data.hash) {
-    var newUrl = '/Dashboard/' + e.data.hash;
+  // CLEAR_AUTH: remove cached entries that may contain stale auth state
+  if (e.data && e.data.type === 'CLEAR_AUTH') {
     caches.open(CACHE).then(function(c) {
-      // Fetch the base HTML and store it under the new hash URL so future
-      // navigations to that URL get a cache hit.
-      fetch('/Dashboard/index.html').then(function(res) {
-        c.put(new Request(newUrl), res);
-      }).catch(function() {});
+      c.keys().then(function(keys) {
+        keys.forEach(function(req) {
+          if (req.url.indexOf('#') !== -1) c.delete(req);
+        });
+      });
     });
   }
 });
