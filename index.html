@@ -1783,25 +1783,9 @@
         <!-- Split & Owed -->
         <div class="card">
             <div class="card-title" onclick="toggleSplitCard()" style="cursor:pointer;display:flex;align-items:center;justify-content:space-between;margin-bottom:0">
-                <span>💰 Split &amp; Owed</span><span id="split_arr">▶</span>
+                <span>💰 Track Money Owed</span><span id="split_arr">▶</span>
             </div>
             <div id="split_body" style="display:none;margin-top:12px">
-                <div style="border-bottom:0.5px solid var(--border);padding-bottom:14px;margin-bottom:14px">
-                    <div style="font-size:13px;font-weight:700;color:var(--text1);margin-bottom:10px">Split Expense (log my share)</div>
-                    <div class="form-grid-3">
-                        <div class="form-group"><label>What</label><input class="fi" id="sp_ex_desc" placeholder="e.g. Dinner at XYZ"></div>
-                        <div class="form-group"><label>Total</label><input type="number" class="fi" id="sp_total" placeholder="1000" oninput="calcSplitShare()"></div>
-                        <div class="form-group"><label>Split ways</label><input type="number" class="fi" id="sp_ways" value="2" min="2" oninput="calcSplitShare()"></div>
-                    </div>
-                    <div class="form-grid" style="margin-bottom:8px">
-                        <div class="form-group"><label>My share</label><input type="number" class="fi" id="sp_share" readonly style="opacity:0.75"></div>
-                        <div class="form-group"><label>Date</label><input type="date" class="fi" id="sp_date"></div>
-                        <div class="form-group"><label>Type</label>
-                            <select class="fs" id="sp_nature"><option value="essential">Essential</option><option value="nonessential" selected>Non-Essential</option></select>
-                        </div>
-                    </div>
-                    <button class="btn btn-o btn-sm admin-only" onclick="addSplitExpense()">+ Save My Share</button>
-                </div>
                 <div style="margin-bottom:14px">
                     <div style="font-size:13px;font-weight:700;color:var(--text1);margin-bottom:10px">Track Money Owed</div>
                     <div class="form-grid" style="margin-bottom:8px">
@@ -2918,7 +2902,7 @@
             html += '<div class=\"form-group\"><label>What did you spend on?</label><input class=\"fi\" id=\"ci_ex_desc\" placeholder=\"e.g. Lunch, Auto\"></div>';
             html += '<div class=\"form-group\"><label>Amount (' + getCurSym() + ')</label><input type=\"number\" class=\"fi\" id=\"ci_ex_amt\" placeholder=\"0\"></div>';
             html += '</div>';
-            html += '<button class=\"btn btn-o\" style=\"width:100%\" onclick=\"var d=document.getElementById(\'ci_ex_desc\').value;var a=document.getElementById(\'ci_ex_amt\').value;if(d&&a){var today=getTodayISO();var ex=getExpenses();var id=newId();ex[id]={id:id,date:today,desc:d,amt:parseFloat(a),type:\'Variable\',nature:\'essential\',notes:\'\'};ls_set(\'expenses_list\',ex);ciNext();}else{appToast(\'Fill both fields or skip\');}\">Save & Continue →</button>';
+            html += '<button class=\"btn btn-o\" style=\"width:100%\" onclick=\"var d=document.getElementById(\'ci_ex_desc\').value;var a=document.getElementById(\'ci_ex_amt\').value;if(d&&a){var today=getTodayISO();var ex=getExpenses();var id=newId();ex[id]={id:id,date:today,desc:d,amt:parseFloat(a),type:\'Variable\',vartype:\'Variable\',nature:\'essential\',notes:\'\'};ls_set(\'expenses_list\',ex);ciNext();}else{appToast(\'Fill both fields or skip\');}\">Save & Continue →</button>';
         }
         if (el) el.innerHTML = html;
     }
@@ -3823,7 +3807,8 @@
         var id = newId();
         // type and vartype kept for backward-compat with existing records
         var nature = (document.getElementById('ex_nature')||{}).value || 'essential';
-        expenses[id] = {id:id, date:date, desc:desc, amt:amt, type:'Variable', vartype:'Variable', notes:notes, nature:nature};
+        var expType = (nature === 'fixed') ? 'Fixed' : 'Variable';
+        expenses[id] = {id:id, date:date, desc:desc, amt:amt, type:expType, vartype:expType, notes:notes, nature:nature};
         ls_set('expenses_list', expenses);
         ls_set('last_expense_meta', {nature: document.getElementById('ex_nature').value});
         document.getElementById('ex_desc').value = '';
@@ -4029,7 +4014,7 @@
             var logKey = id + '_' + monthKey;
             if (logged[logKey]) return;
             var expId = 'rec_auto_' + id + '_' + monthKey;
-            expenses[expId] = {id:expId, date:today, desc:r.name, amt:r.amt, type:'Need', vartype:'Fixed', notes:'Auto-logged (recurring)'};
+            expenses[expId] = {id:expId, date:today, desc:r.name, amt:r.amt, type:'Fixed', vartype:'Fixed', notes:'Auto-logged (recurring)'};
             logged[logKey] = true;
             anyNew = true;
         });
@@ -4068,17 +4053,16 @@
         // Search total banner (only when filtering)
         if (q && keys.length > 0) {
             var srchTotal = keys.reduce(function(sum,id){ return sum + Number(expenses[id].amt||0); }, 0);
-            var srchNeed  = keys.filter(function(id){ return expenses[id].type==='Need'; }).reduce(function(s,id){ return s+Number(expenses[id].amt||0); },0);
-            var srchWant  = keys.filter(function(id){ return expenses[id].type==='Want'; }).reduce(function(s,id){ return s+Number(expenses[id].amt||0); },0);
-            var srchDes   = keys.filter(function(id){ return expenses[id].type==='Desire'; }).reduce(function(s,id){ return s+Number(expenses[id].amt||0); },0);
+            var srchEss=0,srchNonEss=0,srchFixed=0;
+            keys.forEach(function(id){var e=expenses[id],a=Number(e.amt||0);if(e.vartype==='Fixed'||e.type==='Fixed'){srchFixed+=a;}else if(e.nature==='essential'||e.type==='Need'){srchEss+=a;}else{srchNonEss+=a;}});
             html += '<div style="padding:10px;background:rgba(255,107,0,0.08);border:0.5px solid rgba(255,107,0,0.2);border-radius:10px;margin-bottom:10px">';
             html += '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">';
             html += '<span style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.4px">' + keys.length + ' result' + (keys.length>1?'s':'') + ' for "' + esc(q) + '"</span>';
             html += '<span style="font-size:18px;font-weight:800;color:var(--accent)">' + fmtCur(srchTotal) + '</span>';
             html += '</div><div style="display:flex;gap:10px;font-size:11px">';
-            if (srchNeed) html += '<span class="t-need">Need ' + fmtCur(srchNeed) + '</span>';
-            if (srchWant) html += '<span class="t-want">Want ' + fmtCur(srchWant) + '</span>';
-            if (srchDes)  html += '<span class="t-desire">Desire ' + fmtCur(srchDes) + '</span>';
+            if (srchEss)    html += '<span style="color:var(--green)">✅ Ess ' + fmtCur(srchEss) + '</span>';
+            if (srchNonEss) html += '<span style="color:var(--red)">💸 Non-ess ' + fmtCur(srchNonEss) + '</span>';
+            if (srchFixed)  html += '<span style="color:var(--yellow)">🔒 Fixed ' + fmtCur(srchFixed) + '</span>';
             html += '</div></div>';
         }
       // Transaction cards
@@ -4087,14 +4071,16 @@
       } else {
         keys.forEach(function(id){
           var ex = expenses[id];
-          var clr = {Need:'var(--green)',Want:'var(--yellow)',Desire:'var(--purple)'}[ex.type]||'var(--text3)';
+          var isFixedE=(ex.vartype==='Fixed'||ex.type==='Fixed'),isEssE=!isFixedE&&(ex.nature==='essential'||ex.type==='Need');
+          var catLabel=isFixedE?'Fixed':isEssE?'Essential':'Non-ess';
+          var catClr=isFixedE?'var(--yellow)':isEssE?'var(--green)':'var(--red)';
           html += '<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:0.5px solid var(--border2)">';
           html += '<div style="min-width:50px;text-align:center"><div style="font-size:10px;font-weight:700;color:var(--accent)">' + fmtD(new Date(ex.date+'T00:00:00')) + '</div></div>';
           html += '<div style="flex:1;min-width:0"><div style="font-size:13px;font-weight:600;color:var(--text1);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + esc(ex.desc) + '</div>';
           if (ex.notes) html += '<div style="font-size:11px;color:var(--text3)">' + esc(ex.notes) + '</div>';
           html += '</div>';
           html += '<div style="text-align:right;flex-shrink:0"><div style="font-weight:700;color:var(--text1)">' + fmtCur(Number(ex.amt)) + '</div>';
-          html += '<div style="font-size:10px;color:' + clr + '">' + ex.type + '</div></div>';
+          html += '<div style="font-size:10px;color:' + catClr + '">' + catLabel + '</div></div>';
           html += '</div>';
         });
       }
@@ -4102,22 +4088,23 @@
       // Daily summary for filtered keys
       var daily = {};
       keys.forEach(function(id){
-        var ex = expenses[id];
-        if (!daily[ex.date]) daily[ex.date] = {Need:0,Want:0,Desire:0,varTotal:0};
-        daily[ex.date][ex.type] = (daily[ex.date][ex.type]||0) + Number(ex.amt);
-        if (ex.vartype !== 'Fixed') daily[ex.date].varTotal += Number(ex.amt);
+        var ex=expenses[id],a=Number(ex.amt);
+        if(!daily[ex.date])daily[ex.date]={essential:0,nonEssential:0,fixed:0,varTotal:0};
+        var isF=(ex.vartype==='Fixed'||ex.type==='Fixed'),isE=!isF&&(ex.nature==='essential'||ex.type==='Need');
+        if(isF){daily[ex.date].fixed+=a;}else if(isE){daily[ex.date].essential+=a;}else{daily[ex.date].nonEssential+=a;}
+        if(!isF)daily[ex.date].varTotal+=a;
       });
       var dkeys = Object.keys(daily).sort(function(a,b){ return b.localeCompare(a); });
       if (dkeys.length > 0 && !q) {
         html += '<div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;margin:14px 0 8px">Daily Summary</div>';
         dkeys.forEach(function(d){
           var row = daily[d];
-          var total = (row.Need||0) + (row.Want||0) + (row.Desire||0);
+          var total = (row.essential||0) + (row.nonEssential||0) + (row.fixed||0);
           var dayLim = getLimitsForMonth(d.slice(0,7)).daily;
           var diff = dayLim ? (row.varTotal - dayLim) : null;
           var diffStr = diff === null ? '' : ' · <span style="color:' + (diff>0?'var(--red)':'var(--green)') + ';font-weight:700">' + (diff>0?'+':'') + fmtCur(Math.abs(Math.round(diff))) + ' vs limit</span>';
           html += '<div style="display:flex;align-items:center;justify-content:space-between;padding:6px 0;border-bottom:0.5px solid var(--border2)">';
-          html += '<div><span style="font-size:12px;color:var(--text2)">' + d + '</span><span style="font-size:11px;color:var(--text3);margin-left:8px"><span class="t-need">N' + fmtCur(row.Need||0) + '</span> <span class="t-want">W' + fmtCur(row.Want||0) + '</span> <span class="t-desire">D' + fmtCur(row.Desire||0) + '</span>' + diffStr + '</span></div>';
+          html += '<div><span style="font-size:12px;color:var(--text2)">' + d + '</span><span style="font-size:11px;color:var(--text3);margin-left:8px">'+(row.essential?'<span style="color:var(--green)">Ess '+fmtCur(row.essential)+'</span> ':'')+( row.nonEssential?'<span style="color:var(--red)">Non-ess '+fmtCur(row.nonEssential)+'</span> ':'')+( row.fixed?'<span style="color:var(--yellow)">Fixed '+fmtCur(row.fixed)+'</span>':'')+diffStr+'</span></div>';
           html += '<span style="font-weight:700;color:var(--text1)">' + fmtCur(total) + '</span>';
           html += '</div>';
         });
@@ -4126,7 +4113,7 @@
       // Monthly summary (unfiltered only)
       if (!q) {
         var monthly2 = {};
-        allKeys.forEach(function(id){ var ex = expenses[id]; var m = ex.date.slice(0,7); if (!monthly2[m]) monthly2[m] = {Need:0,Want:0,Desire:0,total:0}; monthly2[m][ex.type] = (monthly2[m][ex.type]||0) + Number(ex.amt); monthly2[m].total += Number(ex.amt); });
+        allKeys.forEach(function(id){var ex=expenses[id],a=Number(ex.amt),m=ex.date.slice(0,7);if(!monthly2[m])monthly2[m]={essential:0,nonEssential:0,fixed:0,total:0};var isF=(ex.vartype==='Fixed'||ex.type==='Fixed'),isE=!isF&&(ex.nature==='essential'||ex.type==='Need');if(isF)monthly2[m].fixed+=a;else if(isE)monthly2[m].essential+=a;else monthly2[m].nonEssential+=a;monthly2[m].total+=a;});
         var mkeys2 = Object.keys(monthly2).sort(function(a,b){ return b.localeCompare(a); });
         if (mkeys2.length > 0) {
           html += '<div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;margin:14px 0 8px">Monthly Summary</div>';
@@ -4134,7 +4121,7 @@
             var row = monthly2[m];
             var ml = new Date(m+'-01').toLocaleDateString('en-IN',{month:'short',year:'numeric'});
             html += '<div style="display:flex;align-items:center;justify-content:space-between;padding:6px 0;border-bottom:0.5px solid var(--border2)">';
-            html += '<div><span style="font-size:12px;font-weight:600;color:var(--text1)">' + ml + '</span><span style="font-size:11px;color:var(--text3);margin-left:8px"><span class="t-need">N' + fmtCur(row.Need||0) + '</span> <span class="t-want">W' + fmtCur(row.Want||0) + '</span> <span class="t-desire">D' + fmtCur(row.Desire||0) + '</span></span></div>';
+            html += '<div><span style="font-size:12px;font-weight:600;color:var(--text1)">' + ml + '</span><span style="font-size:11px;color:var(--text3);margin-left:8px">'+(row.essential?'<span style="color:var(--green)">Ess '+fmtCur(row.essential)+'</span> ':'')+( row.nonEssential?'<span style="color:var(--red)">Non-ess '+fmtCur(row.nonEssential)+'</span> ':'')+( row.fixed?'<span style="color:var(--yellow)">Fixed '+fmtCur(row.fixed)+'</span>':'')+'</span></div>';
             html += '<span style="font-weight:700;color:var(--text1)">' + fmtCur(row.total) + '</span>';
             html += '</div>';
           });
@@ -5043,35 +5030,6 @@
       if (open) renderOwed();
     }
 
-    function calcSplitShare() {
-      var total = parseFloat(document.getElementById('sp_total').value) || 0;
-      var ways  = Math.max(1, parseInt(document.getElementById('sp_ways').value) || 2);
-      var share = Math.round((total / ways) * 100) / 100;
-      document.getElementById('sp_share').value = share > 0 ? share : '';
-    }
-
-    function addSplitExpense() {
-      var desc  = document.getElementById('sp_ex_desc').value.trim();
-      var total = parseFloat(document.getElementById('sp_total').value);
-      var ways  = Math.max(2, parseInt(document.getElementById('sp_ways').value) || 2);
-      var date  = document.getElementById('sp_date').value || getTodayISO();
-      if (!desc || !total) { appToast('Fill in description and total amount.'); return; }
-      calcSplitShare();
-      var share = parseFloat(document.getElementById('sp_share').value);
-      if (!share || share <= 0) { appToast('Could not calculate share.'); return; }
-      var ex = getExpenses();
-      var id = newId();
-      ex[id] = { id:id, date:date, desc:desc, amt:share, type:'Variable', nature:(document.getElementById('sp_nature')||{}).value||'nonessential',
-                 notes:'Split ' + ways + ' ways — total ' + fmtCur(total) + ', your share: ' + fmtCur(share) };
-      ls_set('expenses_list', ex);
-      document.getElementById('sp_ex_desc').value = '';
-      document.getElementById('sp_total').value   = '';
-      document.getElementById('sp_ways').value    = '2';
-      document.getElementById('sp_share').value   = '';
-      renderExpenses(); renderExpensePattern();
-      appToast('✅ Your share (' + fmtCur(share) + ') saved as expense.');
-    }
-
     function getOwed() {
       try { var v = localStorage.getItem('owed_list'); return v ? JSON.parse(v) : {}; } catch(e) { return {}; }
     }
@@ -5104,10 +5062,10 @@
       appConfirm(msg, function() {
         if(iOwe){
           var ex=getExpenses(),eid=getTodayISO()+'_settle_'+o.person.replace(/s/g,'').slice(0,6);
-          ex[eid]={id:eid,date:getTodayISO(),desc:'Settled: '+o.desc+' to '+o.person,amt:o.amount,type:'Variable',nature:'essential',notes:'Settlement'};
+          ex[eid]={id:eid,date:getTodayISO(),desc:'Settled: '+o.desc+' to '+o.person,amt:o.amount,type:'Variable',vartype:'Variable',nature:'nonessential',notes:'Settlement'};
           ls_set('expenses_list',ex);
         }
-        delete owed[id];setOwed(owed);renderOwed();renderExpenses();renderExpensePattern();
+        delete owed[id];setOwed(owed);renderOwed();renderExpenses();renderLimits();renderExpensePattern();
         appToast(iOwe?'Settled & logged':'Marked collected');
       }, iOwe ? '✅ Settle & Log' : '✅ Mark Collected', false);
     }
@@ -6596,7 +6554,7 @@
         html += '<div id="ql_quick_exp" style="display:none;background:var(--bg3);border-radius:10px;padding:10px;margin-bottom:8px">';
         html += '<div style="font-size:11px;color:var(--text3);margin-bottom:6px">Quick Expense</div>';
         html += '<div style="display:flex;gap:6px;margin-bottom:6px"><input class="fi" id="ql_ex_desc" placeholder="Spent on…" style="flex:2;font-size:12px"><input type="number" class="fi" id="ql_ex_amt" placeholder="' + getCurSym() + '" style="flex:1;font-size:12px"></div>';
-        html += '<button class="btn btn-o btn-sm" style="width:100%" onclick="var d=document.getElementById(\'ql_ex_desc\').value;var a=document.getElementById(\'ql_ex_amt\').value;if(d&&a){var today=getTodayISO();var ex=getExpenses();var id=newId();ex[id]={id:id,date:today,desc:d,amt:parseFloat(a),type:\'Variable\',nature:\'essential\',notes:\'\'};ls_set(\'expenses_list\',ex);document.getElementById(\'ql_ex_desc\').value=\'\';document.getElementById(\'ql_ex_amt\').value=\'\';document.getElementById(\'ql_quick_exp\').style.display=\'none\';renderTodayChecklist();renderLimits();renderExpensePattern();appToast(\'💸 Expense saved!\');}else{appToast(\'Fill both fields\');}">+ Save</button>';
+        html += '<button class="btn btn-o btn-sm" style="width:100%" onclick="var d=document.getElementById(\'ql_ex_desc\').value;var a=document.getElementById(\'ql_ex_amt\').value;if(d&&a){var today=getTodayISO();var ex=getExpenses();var id=newId();ex[id]={id:id,date:today,desc:d,amt:parseFloat(a),type:\'Variable\',vartype:\'Variable\',nature:\'essential\',notes:\'\'};ls_set(\'expenses_list\',ex);document.getElementById(\'ql_ex_desc\').value=\'\';document.getElementById(\'ql_ex_amt\').value=\'\';document.getElementById(\'ql_quick_exp\').style.display=\'none\';renderTodayChecklist();renderLimits();renderExpensePattern();appToast(\'💸 Expense saved!\');}else{appToast(\'Fill both fields\');}">+ Save</button>';
         html += '</div>';
         // Inline study session form (hidden by default)
         html += '<div id="ql_quick_study" style="display:none;background:var(--bg3);border-radius:10px;padding:10px;margin-bottom:8px">';
