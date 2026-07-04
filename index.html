@@ -5052,10 +5052,8 @@
       if (open) renderOwed();
     }
 
-    function getOwed() {
-      try { var v = localStorage.getItem('owed_list'); return v ? JSON.parse(v) : {}; } catch(e) { return {}; }
-    }
-    function setOwed(val) { try { localStorage.setItem('owed_list', JSON.stringify(val)); } catch(e) {} }
+    function getOwed() { return ls_get('owed_list'); }
+    function setOwed(val) { ls_set('owed_list', val); }
 
     function addOwed() {
       if(document.getElementById('ow_date')&&!document.getElementById('ow_date').value){document.getElementById('ow_date').value=getTodayISO();}
@@ -8308,12 +8306,8 @@
         return result;
     }
 
-    function getHiddenTabs() {
-        try { var v = localStorage.getItem('hidden_tabs'); return v ? JSON.parse(v) : {}; } catch(e) { return {}; }
-    }
-    function setHiddenTabs(val) {
-        try { localStorage.setItem('hidden_tabs', JSON.stringify(val)); } catch(e) {}
-    }
+    function getHiddenTabs() { return ls_get('hidden_tabs'); }
+    function setHiddenTabs(val) { ls_set('hidden_tabs', val); }
 
     function applyTabVisibility() {
         var vis = getTabVisibility();
@@ -8592,12 +8586,8 @@
         var label = which === 'sessions' ? 'all gym sessions' : 'all gym templates';
         appConfirm('Clear ' + label + '?', function() {
             var key = which === 'sessions' ? 'gym_sessions' : 'gym_templates';
-            try { localStorage.removeItem(key); } catch(e) {}
-            // Reload iframe if open
-            var iframe = document.getElementById('gym_iframe');
-            if (iframe && document.getElementById('health_gym_body').style.display !== 'none') {
-                iframe.src = iframe.src;
-            }
+            ls_set(key, []);
+            if (which === 'sessions') { _gymInitialized = false; renderGymHistory(); renderGymProgress(); }
             renderHealthGymSummary();
             appToast('🗑️ ' + label.charAt(0).toUpperCase() + label.slice(1) + ' cleared');
         }, '🗑️ Clear');
