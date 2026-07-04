@@ -1790,7 +1790,7 @@
                     <div style="font-size:13px;font-weight:700;color:var(--text1);margin-bottom:10px">Track Money Owed</div>
                     <div class="form-grid" style="margin-bottom:8px">
                         <div class="form-group"><label>Direction</label>
-                            <select class="fs" id="ow_direction">
+                            <select class="fs" id="ow_direction" onchange="var p=document.getElementById('ow_person');if(p){var d=this.value;p.placeholder=(d==='they_owe'||d==='i_lent')?'e.g. James, Joel, Mike':'e.g. Ravi';}">
                                 <option value="i_owe">I owe them (they paid for me)</option>
                                 <option value="they_owe">They owe me (I paid for them)</option>
                                 <option value="i_lent">I lent cash (they owe me back)</option>
@@ -2498,6 +2498,8 @@
             break;
           case 'expenses':
             renderExpenses(); renderLimits(); renderExpensePattern(); renderOwed();
+            var _lastNat = ls_get('last_expense_meta').nature;
+            if (_lastNat) { var _natEl = document.getElementById('ex_nature'); if (_natEl) _natEl.value = _lastNat; }
             break;
           case 'upskill':
             if (typeof renderUpskill === 'function') renderUpskill();
@@ -3790,12 +3792,6 @@
     function getExpenses() { return ls_get('expenses_list'); }
 
     function addExpense() {
-        // Remember last-used nature as smart default
-        var lastNature = ls_get('last_expense_meta').nature;
-        if (lastNature) {
-            var natEl = document.getElementById('ex_nature');
-            if (natEl) natEl.value = lastNature;
-        }
         var date = document.getElementById('ex_date').value;
         var desc = document.getElementById('ex_desc').value.trim();
         var amt = parseFloat(document.getElementById('ex_amt').value);
@@ -5065,8 +5061,17 @@
       var owDate=(document.getElementById('ow_date')||{}).value||getTodayISO();
       if(!person||!desc||!amount||amount<=0){appToast('Fill all fields.');return;}
       var owed=getOwed();
-      var newId=getTodayISO().replace(/-/g,'')+'_'+person.slice(0,4)+String(Object.keys(owed).length);
-      owed[newId]={id:newId,date:owDate,direction:direction,person:person,desc:desc,amount:amount};
+      if ((direction === 'they_owe' || direction === 'i_lent') && person.indexOf(',') !== -1) {
+        var people = person.split(',').map(function(p){ return p.trim(); }).filter(function(p){ return p.length > 0; });
+        people.forEach(function(p) {
+          var eid = getTodayISO().replace(/-/g,'')+'_'+p.replace(/\s/g,'').slice(0,4)+String(Object.keys(owed).length);
+          owed[eid] = {id:eid, date:owDate, direction:direction, person:p, desc:desc, amount:amount};
+        });
+        appToast(people.length + ' entries added');
+      } else {
+        var newId = getTodayISO().replace(/-/g,'')+'_'+person.slice(0,4)+String(Object.keys(owed).length);
+        owed[newId]={id:newId,date:owDate,direction:direction,person:person,desc:desc,amount:amount};
+      }
       setOwed(owed);
       document.getElementById('ow_person').value='';
       document.getElementById('ow_desc').value='';
