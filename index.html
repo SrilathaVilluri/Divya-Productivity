@@ -3829,6 +3829,9 @@
         delete expenses[id];
         ls_set('expenses_list', expenses);
         renderExpenses();
+        renderLimits();
+        renderExpensePattern();
+        if (_activeTab === 'overview') { updateOverviewMetrics(); }
       }, '🗑️ Delete');
     }
 
@@ -3843,7 +3846,7 @@
         // Old records: type = Need/Want/Desire   → Need=essential, Want/Desire=nonessential
         // New records: type = Variable, nature = essential/nonessential
         // Fixed records: vartype = Fixed (both old and new)
-        var daily = {}, monthly = {};
+        var daily = {}, monthly = {}, dailyItems = {};
         keys.forEach(function(id) {
             var e = expenses[id];
             var amt = Number(e.amt);
@@ -3858,6 +3861,8 @@
                 isNonEssential = (e.type === 'Want' || e.type === 'Desire');
             }
             if (!daily[e.date]) daily[e.date] = {total:0, essential:0, nonEssential:0, fixed:0, varTotal:0};
+            if (!dailyItems[e.date]) dailyItems[e.date] = [];
+            dailyItems[e.date].push(id);
             daily[e.date].total += amt;
             if (isFixed) { daily[e.date].fixed += amt; }
             else { daily[e.date].varTotal += amt; if (isNonEssential) daily[e.date].nonEssential += amt; else daily[e.date].essential += amt; }
@@ -3899,6 +3904,22 @@
                 if (dayLim) {
                     dHtml += '<div style="height:4px;background:var(--bg4);border-radius:2px;overflow:hidden">';
                     dHtml += '<div style="height:100%;width:' + pct + '%;background:' + barClr + ';border-radius:2px;transition:width .3s"></div></div>';
+                }
+                var dayItems = dailyItems[d] || [];
+                if (dayItems.length > 0) {
+                    dHtml += '<div style="margin-top:6px;border-top:0.5px solid var(--border2);padding-top:5px">';
+                    dayItems.forEach(function(eid) {
+                        var e = expenses[eid];
+                        var isFx=(e.vartype==='Fixed'||e.type==='Fixed'),isEs=!isFx&&(e.nature==='essential'||e.type==='Need');
+                        var dotC=isFx?'var(--yellow)':isEs?'var(--green)':'var(--red)';
+                        dHtml += '<div style="display:flex;align-items:center;gap:6px;padding:3px 0">';
+                        dHtml += '<span style="width:6px;height:6px;border-radius:50%;flex-shrink:0;background:'+dotC+'"></span>';
+                        dHtml += '<span style="flex:1;font-size:12px;color:var(--text2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(e.desc)+'</span>';
+                        dHtml += '<span style="font-size:12px;font-weight:600;color:var(--text1);margin-right:4px">'+fmtCur(Number(e.amt))+'</span>';
+                        dHtml += '<button class="btn btn-r" style="font-size:10px;padding:1px 6px;min-height:unset;line-height:1.4;border-radius:6px" onclick="deleteExpense(\''+eid+'\')">✕</button>';
+                        dHtml += '</div>';
+                    });
+                    dHtml += '</div>';
                 }
                 dHtml += '</div>';
             });
@@ -5095,7 +5116,21 @@
         h+='<td style="font-size:10px;color:var(--text3)">'+o.date+'</td>';
         h+='<td><button class="btn btn-o btn-sm admin-only" style="font-size:10px" onclick="settleOwed(\''+id+'\')">OK</button> <button class="btn btn-w btn-sm admin-only" style="font-size:10px" onclick="deleteOwed(\''+id+'\')">Del</button></td></tr>';
       });
-      h+='</table></div>';el.innerHTML=h;
+      h+='</table></div>';
+      if (iT > 0) {
+        var expD=getExpenses(),todayS=isoD(new Date()),curM=todayS.slice(0,7);
+        var eKs=Object.keys(expD).filter(function(id){return expD[id]&&expD[id].date;});
+        var todayVar=eKs.reduce(function(s,id){var e=expD[id];return e.date===todayS&&e.vartype!=='Fixed'&&e.type!=='Fixed'?s+Number(e.amt||0):s;},0);
+        var monthAll=eKs.reduce(function(s,id){var e=expD[id];return e.date&&e.date.slice(0,7)===curM?s+Number(e.amt||0):s;},0);
+        var lim=getLimitsForMonth(curM),dLim=lim.daily,mBudget=lim.monthly||(dLim?dLim*daysInMonth(curM):null);
+        h+='<div style="margin-top:12px;padding:10px;background:rgba(255,159,10,0.08);border:0.5px solid rgba(255,159,10,0.2);border-radius:10px">';
+        h+='<div style="font-size:11px;font-weight:700;color:var(--yellow);margin-bottom:8px">💡 If you settle all you owe ('+fmtCur(iT)+')</div>';
+        if(dLim){var pDay=todayVar+iT;h+='<div style="font-size:11px;color:var(--text3);margin-bottom:4px">Daily: <span style="color:var(--text2)">'+fmtCur(todayVar)+' today</span> + <span style="color:var(--yellow)">'+fmtCur(iT)+' owed</span> = <span style="font-weight:700;color:'+(pDay>dLim?'var(--red)':'var(--green)')+'">'+fmtCur(pDay)+' / '+fmtCur(dLim)+'</span></div>';}
+        if(mBudget){var pMon=monthAll+iT;h+='<div style="font-size:11px;color:var(--text3)">Monthly: <span style="color:var(--text2)">'+fmtCur(monthAll)+' this month</span> + <span style="color:var(--yellow)">'+fmtCur(iT)+' owed</span> = <span style="font-weight:700;color:'+(pMon>mBudget?'var(--red)':'var(--green)')+'">'+fmtCur(pMon)+' / '+fmtCur(mBudget)+'</span></div>';}
+        if(!dLim&&!mBudget)h+='<div style="font-size:11px;color:var(--text3)">Set a limit in Expense Limits to see budget projection.</div>';
+        h+='</div>';
+      }
+      el.innerHTML=h;
     }
 
     // ═══ TASK NOTIFICATIONS ═══
