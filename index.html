@@ -17,6 +17,7 @@
     <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+
     <style>
         /* ══════════════════════════════════════
            DESIGN TOKENS — DARK (default)
@@ -2486,7 +2487,7 @@
         switch (_activeTab) {
           case 'overview':
             renderScores(); updateOverviewMetrics(); renderWeeklyReport();
-            renderCalorieGauge(); renderTodayChecklist();
+            renderCalorieGauge(); renderTodayChecklist(); renderOverviewFocus();
             break;
           case 'today':
             buildSched(); renderHabits(); renderTasks();
@@ -2724,18 +2725,22 @@
                     :isDueToday
                     ?'<span style="font-size:10px;background:rgba(255,159,10,0.15);color:var(--yellow);border-radius:6px;padding:1px 6px;font-weight:700">Due today</span>'
                     :'<span style="font-size:10px;background:rgba(255,159,10,0.1);color:var(--yellow);border-radius:6px;padding:1px 6px;font-weight:700">'+t.dl+'d left</span>';
-                var tdata=(getTasks()[t.id])||{};
-                var status=tdata.status||'todo';
+                var tdata=tasks[t.id]||{};
+                var rawStatus=tdata.status||'';
+                var sl=rawStatus.toLowerCase();
+                var statusKey=sl==='in progress'?'inprogress':(sl||'todo');
                 var sC={todo:'var(--text3)',inprogress:'var(--blue)',blocked:'var(--red)',done:'var(--green)'};
                 var sL={todo:'To Do',inprogress:'In Progress',blocked:'Blocked',done:'Done'};
+                var statusColor=sC[statusKey]||'var(--text3)';
+                var statusLabel=sL[statusKey]||'To Do';
                 html+='<div style="padding:8px;background:rgba(255,59,48,0.06);border:0.5px solid rgba(255,59,48,0.2);border-radius:10px;margin-bottom:6px">';
                 html+='<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">';
                 html+='<span style="font-size:13px;color:var(--red);font-weight:600;flex:1">'+esc(t.name)+'</span>'+badge;
                 html+='</div><div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">';
-                html+='<button class="btn btn-w btn-sm admin-only" style="font-size:10px;padding:3px 8px" onclick="quickCompleteTask(\''+t.id+'\');renderTodayChecklist()">Done</button>';
-                html+='<button class="btn btn-w btn-sm admin-only" style="font-size:10px;padding:3px 8px;color:'+sC[status]+'" onclick="quickCycleTaskStatus(\''+t.id+'\');renderTodayChecklist()">'+sL[status]+'</button>';
-                html+='<button class="btn btn-w btn-sm admin-only" style="font-size:10px;padding:3px 8px" onclick="showNotifOptions(\''+t.id+'\')">Remind</button>';
-                html+='<button class="btn btn-w btn-sm" style="font-size:10px;padding:3px 8px" onclick="showTab(\'today\')">View</button>';
+                html+='<button class="btn btn-g btn-sm admin-only" style="font-size:10px;padding:3px 8px" onclick="completeTask(\''+t.id+'\')">✓ Done</button>';
+                html+='<button class="btn btn-w btn-sm admin-only" style="font-size:10px;padding:3px 8px;color:'+statusColor+'" onclick="quickCycleTaskStatus(\''+t.id+'\');renderTodayChecklist()">'+statusLabel+' ↻</button>';
+                html+='<button class="btn btn-w btn-sm admin-only" style="font-size:10px;padding:3px 8px" onclick="showNotifOptions(\''+t.id+'\')">🔔 Remind</button>';
+                html+='<button class="btn btn-w btn-sm" style="font-size:10px;padding:3px 8px" onclick="viewTaskInToday(\''+t.id+'\')">View →</button>';
                 html+='</div></div>';
             });
         }
@@ -3691,6 +3696,7 @@
           ls_set('tasks_active_list', tasks);
           ls_set('tasks_done_list', done);
           renderTasks();
+          renderTodayChecklist();
         });
       });
       return; // early return, rest handled in callback
@@ -8624,6 +8630,18 @@
         if(cur==='todo')cur='Todo';else if(cur==='inprogress')cur='In Progress';else if(cur==='blocked')cur='Blocked';
         tasks[id].status=cycle[(cycle.indexOf(cur)+1)%cycle.length];
         ls_set('tasks_active_list',tasks);
+    }
+
+    function viewTaskInToday(id) {
+        showTab('today');
+        setTimeout(function() {
+            var body = document.getElementById('today_tasks_body');
+            var arr  = document.getElementById('today_tasks_arr');
+            if (body) { body.style.display = 'block'; }
+            if (arr)  { arr.textContent = '▼'; }
+            var wrap = document.getElementById('tasks_active_wrap');
+            if (wrap) { wrap.scrollIntoView({ behavior: 'smooth', block: 'start' }); }
+        }, 80);
     }
 
     // ═══════════════════════════════════════
